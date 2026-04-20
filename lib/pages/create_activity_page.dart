@@ -4,6 +4,7 @@ import 'package:assignum/models/activity.dart';
 import 'package:assignum/services/activity_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:assignum/pages/invite_members_page.dart';
 
 class CreateActivityPage extends StatefulWidget {
   const CreateActivityPage({super.key});
@@ -82,9 +83,12 @@ class _CreateActivityPageState extends State<CreateActivityPage> {
        );
        await ActivityService().createActivity(activity);
        if (mounted) {
-         Navigator.pop(context);
+         Navigator.pushReplacement(
+           context, 
+           MaterialPageRoute(builder: (_) => InviteMembersPage(activityId: activity.id))
+         );
          ScaffoldMessenger.of(context).showSnackBar(
-           const SnackBar(content: Text('Actividad creada exitosamente')),
+           const SnackBar(content: Text('Actividad guardada. ¡Invita a los participantes!')),
          );
        }
     } catch (e) {

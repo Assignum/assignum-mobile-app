@@ -7,4 +7,10 @@ class ActivityService {
   Future<void> createActivity(Activity a) async {
     await _col.doc(a.id).set(a.toMap());
   }
+
+  Future<void> updateInvitedEmails(String activityId, List<String> emails) async {
+    await _col.doc(activityId).update({
+      'invitedEmails': FieldValue.arrayUnion(emails)
+    });
+  }
 }

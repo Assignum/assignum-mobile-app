@@ -7,6 +7,7 @@ class Activity {
   final DateTime dueDate;
   final String documentLink;
   final List<String> tasks;
+  final List<String> invitedEmails;
 
   Activity({
     required this.id,
@@ -15,6 +16,7 @@ class Activity {
     required this.dueDate,
     required this.documentLink,
     required this.tasks,
+    this.invitedEmails = const [],
   });
 
   Map<String, dynamic> toMap() {
@@ -25,6 +27,7 @@ class Activity {
       'dueDate': dueDate.toIso8601String(),
       'documentLink': documentLink,
       'tasks': tasks,
+      'invitedEmails': invitedEmails,
     };
   }
 
@@ -36,6 +39,7 @@ class Activity {
       dueDate: DateTime.tryParse(map['dueDate'] ?? '') ?? DateTime.now(),
       documentLink: map['documentLink'] ?? '',
       tasks: List<String>.from(map['tasks'] ?? []),
+      invitedEmails: List<String>.from(map['invitedEmails'] ?? []),
     );
   }
 }
