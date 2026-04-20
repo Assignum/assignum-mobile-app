@@ -6,6 +6,8 @@ import 'package:assignum/models/user_profile.dart';
 import 'package:assignum/auth.dart';
 import 'package:assignum/widgets/ui.dart';
 import 'package:assignum/pages/create_activity_page.dart';
+import 'package:assignum/pages/activities_list_page.dart';
+import 'package:assignum/services/activity_service.dart';
 
 class HomePage extends StatelessWidget {
   HomePage({super.key});
@@ -61,7 +63,12 @@ class HomePage extends StatelessWidget {
                   children: [
                     PrimaryButton(
                       text: 'Tus actividades',
-                      onPressed: () {},
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const ActivitiesListPage())
+                        );
+                      },
                     ),
                     const SizedBox(height: 12),
                     SecondaryButton(

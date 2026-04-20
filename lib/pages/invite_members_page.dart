@@ -2,9 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:assignum/widgets/ui.dart';
 import 'package:assignum/services/activity_service.dart';
 
+import 'package:assignum/models/activity.dart';
+import 'package:assignum/pages/activity_details_page.dart';
+
 class InviteMembersPage extends StatefulWidget {
-  final String activityId;
-  const InviteMembersPage({super.key, required this.activityId});
+  final Activity activity;
+  const InviteMembersPage({super.key, required this.activity});
 
   @override
   State<InviteMembersPage> createState() => _InviteMembersPageState();
@@ -35,21 +38,72 @@ class _InviteMembersPageState extends State<InviteMembersPage> {
     setState(() => _emails.removeAt(index));
   }
 
+  void _showSuccessDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false, // Prevent dismissing by tapping outside
+      builder: (BuildContext ctx) {
+        return Dialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(24),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Compañeros Invitados\nExitosamente',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 24),
+                PrimaryButton(
+                  text: 'Siguiente',
+                  onPressed: () {
+                     Navigator.pop(ctx); 
+                     
+                     final updatedAct = Activity(
+                        id: widget.activity.id,
+                        uid: widget.activity.uid,
+                        name: widget.activity.name,
+                        dueDate: widget.activity.dueDate,
+                        documentLink: widget.activity.documentLink,
+                        tasks: widget.activity.tasks,
+                        invitedEmails: _emails.toList(),
+                     );
+                     
+                     Navigator.pushReplacement(
+                       context, 
+                       MaterialPageRoute(builder: (_) => ActivityDetailsPage(activity: updatedAct, isCreationFlow: true))
+                     );
+                  },
+                )
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   Future<void> _submit() async {
     if (_emails.isEmpty) {
-      // Si el usuario da "Siguiente" sin invitados, solo volvemos al inicio.
-      Navigator.pop(context);
+      Navigator.pushReplacement(
+         context, 
+         MaterialPageRoute(builder: (_) => ActivityDetailsPage(activity: widget.activity, isCreationFlow: true))
+      );
       return;
     }
 
     setState(() => _saving = true);
     try {
-      await ActivityService().updateInvitedEmails(widget.activityId, _emails);
+      await ActivityService().updateInvitedEmails(widget.activity.id, _emails);
       if (mounted) {
-         Navigator.pop(context); 
-         ScaffoldMessenger.of(context).showSnackBar(
-           const SnackBar(content: Text('Invitaciones enviadas')),
-         );
+         _showSuccessDialog();
       }
     } catch (e) {
       if (mounted) {

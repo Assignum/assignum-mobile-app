@@ -85,7 +85,7 @@ class _CreateActivityPageState extends State<CreateActivityPage> {
        if (mounted) {
          Navigator.pushReplacement(
            context, 
-           MaterialPageRoute(builder: (_) => InviteMembersPage(activityId: activity.id))
+           MaterialPageRoute(builder: (_) => InviteMembersPage(activity: activity))
          );
          ScaffoldMessenger.of(context).showSnackBar(
            const SnackBar(content: Text('Actividad guardada. ¡Invita a los participantes!')),
