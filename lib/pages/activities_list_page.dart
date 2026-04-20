@@ -31,6 +31,12 @@ class _ActivitiesListPageState extends State<ActivitiesListPage> {
     }
   }
 
+  Future<void> _delete(String id) async {
+    setState(() => _loading = true);
+    await _service.deleteActivity(id);
+    await _load();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -83,20 +89,28 @@ class _ActivitiesListPageState extends State<ActivitiesListPage> {
                              ]
                            ),
                          ),
-                         ElevatedButton(
-                            onPressed: () {
-                               Navigator.push(context, MaterialPageRoute(builder: (_) => ActivityDetailsPage(activity: act, isCreationFlow: false)));
-                            },
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFFE51D2A),
-                              foregroundColor: Colors.white,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(20),
-                              ),
-                              minimumSize: const Size(60, 36),
-                              elevation: 0,
-                            ),
-                            child: const Text('Ver', style: TextStyle(fontWeight: FontWeight.bold)),
+                         Row(
+                           children: [
+                             ElevatedButton(
+                                onPressed: () {
+                                   Navigator.push(context, MaterialPageRoute(builder: (_) => ActivityDetailsPage(activity: act, isCreationFlow: false)));
+                                },
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFFE51D2A),
+                                  foregroundColor: Colors.white,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
+                                  minimumSize: const Size(60, 36),
+                                  elevation: 0,
+                                ),
+                                child: const Text('Ver', style: TextStyle(fontWeight: FontWeight.bold)),
+                             ),
+                             IconButton(
+                               icon: const Icon(Icons.delete_outline, color: Colors.black54),
+                               onPressed: () => _delete(act.id),
+                             ),
+                           ],
                          )
                        ]
                      )

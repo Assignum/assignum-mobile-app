@@ -8,6 +8,8 @@ class Activity {
   final String documentLink;
   final List<String> tasks;
   final List<String> invitedEmails;
+  final List<String> acceptedEmails;
+  final Map<String, String> memberNames;
 
   Activity({
     required this.id,
@@ -17,6 +19,8 @@ class Activity {
     required this.documentLink,
     required this.tasks,
     this.invitedEmails = const [],
+    this.acceptedEmails = const [],
+    this.memberNames = const {},
   });
 
   Map<String, dynamic> toMap() {
@@ -28,6 +32,8 @@ class Activity {
       'documentLink': documentLink,
       'tasks': tasks,
       'invitedEmails': invitedEmails,
+      'acceptedEmails': acceptedEmails,
+      'memberNames': memberNames,
     };
   }
 
@@ -40,6 +46,8 @@ class Activity {
       documentLink: map['documentLink'] ?? '',
       tasks: List<String>.from(map['tasks'] ?? []),
       invitedEmails: List<String>.from(map['invitedEmails'] ?? []),
+      acceptedEmails: List<String>.from(map['acceptedEmails'] ?? []),
+      memberNames: Map<String, String>.from(map['memberNames'] ?? {}),
     );
   }
 }

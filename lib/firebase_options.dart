@@ -53,10 +53,11 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSyBzMXaG8Eo4hAzDDe0YKy5wV0s_F7hwPNE',
-    appId: '1:14782673383:android:175d0b5dd7263cf9d6cd42',
-    messagingSenderId: '14782673383',
-    projectId: 'asignum-9748d',
-    storageBucket: 'asignum-9748d.firebasestorage.app',
+    apiKey: 'AIzaSyDfPMY_pP_ys7y06qa6_HT1Aqdi3TFTgqk',
+    appId: '1:389968817022:android:a99815eb6cd2a802c4612f',
+    messagingSenderId: '389968817022',
+    projectId: 'assignum-database',
+    storageBucket: 'assignum-database.firebasestorage.app',
   );
+
 }

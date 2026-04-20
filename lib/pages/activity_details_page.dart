@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:assignum/models/activity.dart';
 import 'package:assignum/widgets/ui.dart';
 import 'package:assignum/pages/task_details_page.dart';
+import 'package:assignum/pages/member_task_page.dart';
+import 'package:assignum/auth.dart';
+import 'package:assignum/services/user_service.dart';
 
 class ActivityDetailsPage extends StatefulWidget {
   final Activity activity;
@@ -15,13 +18,28 @@ class ActivityDetailsPage extends StatefulWidget {
 
 class _ActivityDetailsPageState extends State<ActivityDetailsPage> {
   late bool _showTasks;
+  String _leaderName = 'Cargando...';
 
   @override
   void initState() {
     super.initState();
-    // Si NO estamos creando (o sea, si entramos desde "Tus Actividades"), de frente mostramos las Tareas.
-    // Si estamos creando, iniciamos en los miembros para que podamos presionar el botón de "Dividir Tareas" primero.
     _showTasks = !widget.isCreationFlow;
+    _fetchLeaderName();
+  }
+
+  Future<void> _fetchLeaderName() async {
+    bool isLeaderSession = widget.activity.uid == Auth().currentUser?.uid;
+    if (isLeaderSession) {
+      if (mounted) setState(() => _leaderName = 'Tú');
+      return;
+    }
+    
+    final prof = await UserService().getProfile(widget.activity.uid);
+    if (mounted) {
+       setState(() {
+         _leaderName = prof?.fullName ?? 'Líder';
+       });
+    }
   }
 
   void _showSuccessDialog() {
@@ -63,15 +81,32 @@ class _ActivityDetailsPageState extends State<ActivityDetailsPage> {
   }
 
   Widget _buildMembersList() {
+    final present = widget.activity.acceptedEmails;
+    final pending = widget.activity.invitedEmails;
+    
     return Column(
       children: [
         const Text('Lista de Miembros', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
         const SizedBox(height: 16),
         Expanded(
           child: ListView.builder(
-            itemCount: widget.activity.invitedEmails.length + 1, 
+            itemCount: present.length + pending.length + 1, 
             itemBuilder: (ctx, i) {
-               String member = i == 0 ? 'Tú (Líder)' : widget.activity.invitedEmails[i - 1].split('@').first;
+               String memberText = '';
+               bool isLeader = false;
+               
+               if (i == 0) {
+                 bool isSessionLeader = widget.activity.uid == Auth().currentUser?.uid;
+                 memberText = isSessionLeader ? 'Tú (Líder)' : '$_leaderName (Líder)';
+                 isLeader = true;
+               } else if (i <= present.length) {
+                 final m = present[i - 1];
+                 final name = widget.activity.memberNames[m.replaceAll('.', '_')] ?? m;
+                 memberText = name;
+               } else {
+                 final m = pending[i - 1 - present.length];
+                 memberText = '$m (Pendiente)';
+               }
                return Container(
                  margin: const EdgeInsets.only(bottom: 12),
                  padding: const EdgeInsets.only(left: 20, right: 8, top: 4, bottom: 4),
@@ -84,12 +119,13 @@ class _ActivityDetailsPageState extends State<ActivityDetailsPage> {
                    children: [
                      Expanded(
                        child: Text(
-                         member, 
+                         memberText, 
                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                          overflow: TextOverflow.ellipsis,
                        ),
                      ),
-                     ElevatedButton(
+                     if (!isLeader)
+                       ElevatedButton(
                         onPressed: () {},
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFFE51D2A),
@@ -132,28 +168,31 @@ class _ActivityDetailsPageState extends State<ActivityDetailsPage> {
   }
 
   Widget _buildTasksList() {
-    // Collect all members to evenly distribute tasks
-    final allMembers = ['Tú (Líder)', ...widget.activity.invitedEmails.map((e) => e.split('@').first)];
+    final present = widget.activity.acceptedEmails.map((m) => widget.activity.memberNames[m.replaceAll('.', '_')] ?? m).toList();
+    
+    bool isSessionLeader = widget.activity.uid == Auth().currentUser?.uid;
+    String leaderLabel = isSessionLeader ? 'Tú (Líder)' : '$_leaderName (Líder)';
+    final allMembers = [leaderLabel, ...present, ...widget.activity.invitedEmails];
     
     return Column(
       children: [
         Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-             const Text('Puntos a realizar', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-             ElevatedButton(
-               onPressed: () => setState(() => _showTasks = false),
-               style: ElevatedButton.styleFrom(
-                 backgroundColor: const Color(0xFFE51D2A),
-                 foregroundColor: Colors.white,
-                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                 minimumSize: const Size(60, 32),
-                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
-                 elevation: 0,
-               ),
-               child: const Text('Miembros', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-             )
-          ],
+           mainAxisAlignment: MainAxisAlignment.spaceBetween,
+           children: [
+              const Text('Puntos a realizar', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              ElevatedButton(
+                onPressed: () => setState(() => _showTasks = false),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFE51D2A),
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                  minimumSize: const Size(60, 32),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
+                  elevation: 0,
+                ),
+                child: const Text('Miembros', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+              )
+           ],
         ),
         const SizedBox(height: 16),
         Expanded(
@@ -192,11 +231,20 @@ class _ActivityDetailsPageState extends State<ActivityDetailsPage> {
                      ),
                      ElevatedButton(
                         onPressed: () {
-                           Navigator.push(context, MaterialPageRoute(builder: (_) => TaskDetailsPage(
-                              activity: widget.activity,
-                              taskName: taskName,
-                              assignedTo: assignedTo,
-                           )));
+                           bool isLeader = widget.activity.uid == Auth().currentUser?.uid;
+                           if (isLeader) {
+                              Navigator.push(context, MaterialPageRoute(builder: (_) => TaskDetailsPage(
+                                 activity: widget.activity,
+                                 taskName: taskName,
+                                 assignedTo: assignedTo,
+                              )));
+                           } else {
+                              Navigator.push(context, MaterialPageRoute(builder: (_) => MemberTaskPage(
+                                 activity: widget.activity,
+                                 taskName: taskName,
+                                 assignedTo: assignedTo,
+                              )));
+                           }
                         },
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFFE51D2A),
@@ -273,7 +321,7 @@ class _ActivityDetailsPageState extends State<ActivityDetailsPage> {
                         ],
                       ),
                       const SizedBox(height: 8),
-                      const Text('Team Leader: Tú', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                      Text('Team Leader: $_leaderName', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                    ]
                  )
                ),

@@ -1,13 +1,13 @@
 {
   "project_info": {
-    "project_number": "14782673383",
-    "project_id": "asignum-9748d",
-    "storage_bucket": "asignum-9748d.firebasestorage.app"
+    "project_number": "389968817022",
+    "project_id": "assignum-database",
+    "storage_bucket": "assignum-database.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:14782673383:android:175d0b5dd7263cf9d6cd42",
+        "mobilesdk_app_id": "1:389968817022:android:a99815eb6cd2a802c4612f",
         "android_client_info": {
           "package_name": "com.lifh.assignum"
         }
@@ -15,7 +15,7 @@
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyBzMXaG8Eo4hAzDDe0YKy5wV0s_F7hwPNE"
+          "current_key": "AIzaSyDfPMY_pP_ys7y06qa6_HT1Aqdi3TFTgqk"
         }
       ],
       "services": {
