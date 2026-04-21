@@ -6,6 +6,7 @@ import 'package:assignum/iam/infrastructure/auth.dart';
 import 'package:assignum/activities/presentation/create_activity_page.dart';
 import 'package:assignum/activities/presentation/activities_list_page.dart';
 import 'package:assignum/core/presentation/notifications_page.dart';
+import 'package:assignum/iam/presentation/profile_page.dart';
 
 class HomePage extends StatelessWidget {
   HomePage({super.key});
@@ -69,6 +70,7 @@ class HomePage extends StatelessWidget {
               }),
               _buildDrawerItem(title: 'Perfil', onTap: () {
                 Navigator.pop(context);
+                Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfilePage()));
               }),
               _buildDrawerItem(title: 'Notificaciones', onTap: () {
                 Navigator.pop(context);
