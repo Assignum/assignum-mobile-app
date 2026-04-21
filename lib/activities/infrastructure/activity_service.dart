@@ -74,6 +74,20 @@ class ActivityService {
     }
   }
 
+  Stream<Activity?> getActivityStream(String id) {
+    if (USE_LOCAL_JSON) {
+      return Stream.fromFuture(_readLocal()).map((list) {
+         final idx = list.indexWhere((a) => a.id == id);
+         return idx == -1 ? null : list[idx];
+      });
+    } else {
+      return _col.doc(id).snapshots().map((snapshot) {
+        if (!snapshot.exists || snapshot.data() == null) return null;
+        return Activity.fromMap(snapshot.data()!);
+      });
+    }
+  }
+
   Future<void> createActivity(Activity a) async {
     if (USE_LOCAL_JSON) {
       final list = await _readLocal();
@@ -81,6 +95,19 @@ class ActivityService {
       await _writeLocal(list);
     } else {
       await _col.doc(a.id).set(a.toMap());
+    }
+  }
+
+  Future<void> updateActivity(Activity a) async {
+    if (USE_LOCAL_JSON) {
+      final list = await _readLocal();
+      final idx = list.indexWhere((item) => item.id == a.id);
+      if (idx != -1) {
+        list[idx] = a;
+        await _writeLocal(list);
+      }
+    } else {
+      await _col.doc(a.id).update(a.toMap());
     }
   }
 

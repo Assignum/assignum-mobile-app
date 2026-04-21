@@ -1,20 +1,55 @@
 import 'package:flutter/material.dart';
 import 'package:assignum/activities/domain/activity.dart';
+import 'package:assignum/activities/domain/activity_task.dart';
+import 'package:assignum/activities/infrastructure/activity_service.dart';
 import 'package:assignum/shared/presentation/widgets/ui.dart';
+import 'package:assignum/activities/presentation/member_task_page.dart';
 
-class TaskDetailsPage extends StatelessWidget {
+class TaskDetailsPage extends StatefulWidget {
   final Activity activity;
-  final String taskName;
-  final String assignedTo;
+  final ActivityTask task;
+  final String assigneeName;
 
   const TaskDetailsPage({
     super.key,
     required this.activity,
-    required this.taskName,
-    required this.assignedTo,
+    required this.task,
+    required this.assigneeName,
   });
 
-  void _showSuccessDialog(BuildContext context) {
+  @override
+  State<TaskDetailsPage> createState() => _TaskDetailsPageState();
+}
+
+class _TaskDetailsPageState extends State<TaskDetailsPage> {
+  late ActivityTask _currentTask;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentTask = widget.task;
+  }
+
+  void _refreshTask() {
+    final idx = widget.activity.tasks.indexWhere((t) => t.name == widget.task.name);
+    if (idx != -1) {
+      setState(() {
+        _currentTask = widget.activity.tasks[idx];
+      });
+    }
+  }
+
+  Future<void> _verifyTask(BuildContext context) async {
+    final updatedTask = _currentTask.copyWith(status: 'Verificado');
+    final idx = widget.activity.tasks.indexWhere((t) => t.name == _currentTask.name);
+    if (idx != -1) {
+      widget.activity.tasks[idx] = updatedTask;
+      await ActivityService().updateActivity(widget.activity);
+      _refreshTask();
+    }
+    
+    if (!context.mounted) return;
+
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -27,7 +62,7 @@ class TaskDetailsPage extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  '$taskName Verificada\nExitosamente',
+                  '${_currentTask.name} Verificada\nExitosamente',
                   textAlign: TextAlign.center,
                   style: const TextStyle(
                     fontSize: 18,
@@ -52,7 +87,7 @@ class TaskDetailsPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final dateStr = '${activity.dueDate.day.toString().padLeft(2,'0')}/${activity.dueDate.month.toString().padLeft(2,'0')}/${activity.dueDate.year.toString().substring(2)}';
+    final dateStr = '${widget.activity.dueDate.day.toString().padLeft(2,'0')}/${widget.activity.dueDate.month.toString().padLeft(2,'0')}/${widget.activity.dueDate.year.toString().substring(2)}';
     
     return Scaffold(
       appBar: AppBar(
@@ -81,15 +116,43 @@ class TaskDetailsPage extends StatelessWidget {
                    color: Colors.black.withOpacity(0.12),
                    borderRadius: BorderRadius.circular(30),
                  ),
-                 child: Column(
-                   crossAxisAlignment: CrossAxisAlignment.start,
+                 child: Row(
+                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                    children: [
-                      Text(
-                        taskName,
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                             Text(
+                               _currentTask.name,
+                               style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
+                               overflow: TextOverflow.ellipsis,
+                             ),
+                             const SizedBox(height: 4),
+                             Text('Asignada a: ${widget.assigneeName}', style: const TextStyle(fontSize: 14), overflow: TextOverflow.ellipsis),
+                          ]
+                        ),
                       ),
-                      const SizedBox(height: 4),
-                      Text('Asignada a: $assignedTo', style: const TextStyle(fontSize: 14)),
+                      const SizedBox(width: 8),
+                      ElevatedButton(
+                         onPressed: () {
+                            Navigator.push(context, MaterialPageRoute(builder: (_) => MemberTaskPage(
+                               activity: widget.activity,
+                               task: _currentTask,
+                               assigneeName: widget.assigneeName,
+                            ))).then((_) => _refreshTask());
+                         },
+                         style: ElevatedButton.styleFrom(
+                           backgroundColor: Colors.black87,
+                           foregroundColor: Colors.white,
+                           shape: RoundedRectangleBorder(
+                             borderRadius: BorderRadius.circular(20),
+                           ),
+                           minimumSize: const Size(60, 36),
+                           elevation: 0,
+                         ),
+                         child: const Text('Modificar', style: TextStyle(fontWeight: FontWeight.bold)),
+                      )
                    ]
                  )
                ),
@@ -101,38 +164,41 @@ class TaskDetailsPage extends StatelessWidget {
                      color: Colors.black.withOpacity(0.08),
                      borderRadius: BorderRadius.circular(30),
                    ),
-                   child: Column(
-                     crossAxisAlignment: CrossAxisAlignment.start,
-                     children: [
-                       const Text('Status: Finalizada (Sin Verificar)', style: TextStyle(fontSize: 16)),
-                       const SizedBox(height: 8),
-                       Text('Fecha: $dateStr', style: const TextStyle(fontSize: 16)),
-                       const SizedBox(height: 8),
-                       const Text('Enlace al documento:', style: TextStyle(fontSize: 16)),
-                       const SizedBox(height: 40),
-                       Center(
-                         child: Text(
-                           activity.documentLink.isEmpty ? 'https://docs.google.com/document/d/1lN-_eA9eBeD5-M...' : activity.documentLink,
-                           textAlign: TextAlign.center,
+                   child: SingleChildScrollView(
+                     child: Column(
+                       crossAxisAlignment: CrossAxisAlignment.start,
+                       children: [
+                         Text('Status: ${_currentTask.status}', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                         const SizedBox(height: 12),
+                         Text('Fecha límite: $dateStr', style: const TextStyle(fontSize: 16)),
+                         const SizedBox(height: 12),
+                         const Text('Enlace al documento:', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                         const SizedBox(height: 8),
+                         Text(
+                           _currentTask.links.isEmpty ? (widget.activity.documentLink.isEmpty ? 'Sin enlace' : widget.activity.documentLink) : _currentTask.links,
                            style: const TextStyle(fontSize: 14),
                          ),
-                       ),
-                       const Spacer(),
-                       Center(
-                         child: ElevatedButton(
-                           onPressed: () => _showSuccessDialog(context),
-                           style: ElevatedButton.styleFrom(
-                             backgroundColor: const Color(0xFFE51D2A),
-                             foregroundColor: Colors.white,
-                             shape: RoundedRectangleBorder(
-                               borderRadius: BorderRadius.circular(24),
+                         const SizedBox(height: 16),
+                         const Text('Comentarios:', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                         const SizedBox(height: 8),
+                         Text(_currentTask.comments.isEmpty ? 'Sin comentarios' : _currentTask.comments, style: const TextStyle(fontSize: 14)),
+                         const SizedBox(height: 32),
+                         Center(
+                           child: ElevatedButton(
+                             onPressed: () => _verifyTask(context),
+                             style: ElevatedButton.styleFrom(
+                               backgroundColor: const Color(0xFFE51D2A),
+                               foregroundColor: Colors.white,
+                               shape: RoundedRectangleBorder(
+                                 borderRadius: BorderRadius.circular(24),
+                               ),
+                               padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
                              ),
-                             padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
+                             child: const Text('Verificado', style: TextStyle(fontSize: 16)),
                            ),
-                           child: const Text('Verificado', style: TextStyle(fontSize: 16)),
-                         ),
-                       )
-                     ]
+                         )
+                       ]
+                     )
                    )
                  )
                )

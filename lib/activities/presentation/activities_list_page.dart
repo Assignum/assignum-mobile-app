@@ -31,6 +31,12 @@ class _ActivitiesListPageState extends State<ActivitiesListPage> {
     }
   }
 
+  int _calculateProgress(Activity act) {
+    if (act.tasks.isEmpty) return 0;
+    int verified = act.tasks.where((t) => t.status == 'Verificado').length;
+    return ((verified / act.tasks.length) * 100).toInt();
+  }
+
   Future<void> _delete(String id) async {
     setState(() => _loading = true);
     await _service.deleteActivity(id);
@@ -80,10 +86,10 @@ class _ActivitiesListPageState extends State<ActivitiesListPage> {
                              children: [
                                Text(act.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16), overflow: TextOverflow.ellipsis),
                                const SizedBox(height: 4),
-                               const Row(
+                               Row(
                                  children: [
-                                    Text('Progreso: ', style: TextStyle(fontSize: 14)),
-                                    Text('0%', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+                                    const Text('Progreso: ', style: TextStyle(fontSize: 14)),
+                                    Text('${_calculateProgress(act)}%', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
                                  ]
                                )
                              ]
@@ -93,7 +99,8 @@ class _ActivitiesListPageState extends State<ActivitiesListPage> {
                            children: [
                              ElevatedButton(
                                 onPressed: () {
-                                   Navigator.push(context, MaterialPageRoute(builder: (_) => ActivityDetailsPage(activity: act, isCreationFlow: false)));
+                                   Navigator.push(context, MaterialPageRoute(builder: (_) => ActivityDetailsPage(activity: act, isCreationFlow: false)))
+                                      .then((_) => _load());
                                 },
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: const Color(0xFFE51D2A),

@@ -1,17 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:assignum/activities/domain/activity.dart';
+import 'package:assignum/activities/domain/activity_task.dart';
+import 'package:assignum/activities/infrastructure/activity_service.dart';
 import 'package:assignum/shared/presentation/widgets/ui.dart';
+import 'package:assignum/activities/domain/auth_facade.dart';
 
 class MemberTaskPage extends StatefulWidget {
   final Activity activity;
-  final String taskName;
-  final String assignedTo;
+  final ActivityTask task;
+  final String assigneeName;
 
   const MemberTaskPage({
     super.key,
     required this.activity,
-    required this.taskName,
-    required this.assignedTo,
+    required this.task,
+    required this.assigneeName,
   });
 
   @override
@@ -19,6 +22,40 @@ class MemberTaskPage extends StatefulWidget {
 }
 
 class _MemberTaskPageState extends State<MemberTaskPage> {
+  late String _status;
+  final _commentsCtrl = TextEditingController();
+  final _filesCtrl = TextEditingController();
+  final _linksCtrl = TextEditingController();
+  bool _saving = false;
+
+  late List<String> _statusOptions;
+  late bool _isLeader;
+
+  @override
+  void initState() {
+    super.initState();
+    _isLeader = widget.activity.uid == IAuthFacade.instance.currentUserId;
+    _statusOptions = ['Pendiente', 'En progreso', 'Finalizado'];
+    if (_isLeader || widget.task.status == 'Verificado') {
+      _statusOptions.add('Verificado');
+    }
+    _status = widget.task.status;
+    if (!_statusOptions.contains(_status)) {
+      _status = 'Pendiente';
+    }
+    _commentsCtrl.text = widget.task.comments;
+    _filesCtrl.text = widget.task.files;
+    _linksCtrl.text = widget.task.links;
+  }
+
+  @override
+  void dispose() {
+    _commentsCtrl.dispose();
+    _filesCtrl.dispose();
+    _linksCtrl.dispose();
+    super.dispose();
+  }
+
   void _showSuccessDialog() {
     showDialog(
       context: context,
@@ -32,7 +69,7 @@ class _MemberTaskPageState extends State<MemberTaskPage> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  '${widget.taskName} Finalizada\ncorrectamente',
+                  '${widget.task.name} Actualizada\ncorrectamente',
                   textAlign: TextAlign.center,
                   style: const TextStyle(
                     fontSize: 18,
@@ -55,6 +92,28 @@ class _MemberTaskPageState extends State<MemberTaskPage> {
     );
   }
 
+  Future<void> _saveTask() async {
+    setState(() => _saving = true);
+    
+    final updatedTask = widget.task.copyWith(
+      status: _status,
+      comments: _commentsCtrl.text,
+      files: _filesCtrl.text,
+      links: _linksCtrl.text,
+    );
+
+    final idx = widget.activity.tasks.indexWhere((t) => t.name == widget.task.name);
+    if (idx != -1) {
+      widget.activity.tasks[idx] = updatedTask;
+      await ActivityService().updateActivity(widget.activity);
+    }
+    
+    if (mounted) {
+      setState(() => _saving = false);
+      _showSuccessDialog();
+    }
+  }
+
   Widget _buildFieldTitle(String title) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8.0, top: 12.0),
@@ -62,18 +121,28 @@ class _MemberTaskPageState extends State<MemberTaskPage> {
     );
   }
 
-  Widget _buildTextField() {
+  Widget _buildTextField(TextEditingController ctrl, {int maxLines = 1, bool enabled = true}) {
     return Container(
-      height: 45,
       decoration: BoxDecoration(
         color: Colors.black.withOpacity(0.08),
         borderRadius: BorderRadius.circular(20),
+      ),
+      child: TextField(
+        controller: ctrl,
+        maxLines: maxLines,
+        enabled: enabled,
+        decoration: const InputDecoration(
+          border: InputBorder.none,
+          contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        ),
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    bool isReadOnly = !_isLeader && _status == 'Verificado';
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Tus Actividades', style: TextStyle(color: Colors.white, fontSize: 18)),
@@ -105,11 +174,11 @@ class _MemberTaskPageState extends State<MemberTaskPage> {
                    crossAxisAlignment: CrossAxisAlignment.start,
                    children: [
                       Text(
-                        widget.taskName,
+                        widget.task.name,
                         style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
                       ),
                       const SizedBox(height: 4),
-                      Text('Asignada a: ${widget.assignedTo}', style: const TextStyle(fontSize: 14)),
+                      Text('Asignada a: ${widget.assigneeName}', style: const TextStyle(fontSize: 14)),
                    ]
                  )
                ),
@@ -133,36 +202,49 @@ class _MemberTaskPageState extends State<MemberTaskPage> {
                              color: Colors.black.withOpacity(0.08),
                              borderRadius: BorderRadius.circular(20),
                            ),
-                           child: Row(
-                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                             children: [
-                               const SizedBox(), 
-                               const Icon(Icons.keyboard_arrow_down, color: Colors.black, size: 28),
-                             ],
-                           )
+                           child: DropdownButtonHideUnderline(
+                             child: DropdownButton<String>(
+                               value: _status,
+                               isExpanded: true,
+                               icon: const Icon(Icons.keyboard_arrow_down, color: Colors.black, size: 28),
+                               items: _statusOptions.map((s) => DropdownMenuItem(value: s, child: Text(s))).toList(),
+                               onChanged: isReadOnly ? null : (v) {
+                                 if (v != null) setState(() => _status = v);
+                               },
+                             ),
+                           ),
                          ),
                          _buildFieldTitle('Comentarios'),
-                         _buildTextField(),
+                         _buildTextField(_commentsCtrl, maxLines: 3, enabled: !isReadOnly),
                          _buildFieldTitle('Archivos'),
-                         _buildTextField(),
+                         _buildTextField(_filesCtrl, enabled: !isReadOnly),
                          _buildFieldTitle('Enlaces'),
-                         _buildTextField(),
+                         _buildTextField(_linksCtrl, enabled: !isReadOnly),
                          const SizedBox(height: 32),
-                         Center(
-                           child: ElevatedButton(
-                             onPressed: _showSuccessDialog,
-                             style: ElevatedButton.styleFrom(
-                               backgroundColor: const Color(0xFFE51D2A),
-                               foregroundColor: Colors.white,
-                               shape: RoundedRectangleBorder(
-                                 borderRadius: BorderRadius.circular(24),
-                               ),
-                               padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
-                               elevation: 0,
+                         if (isReadOnly)
+                           const Center(
+                             child: Text(
+                               'Esta tarea ya fue verificada por el Team Leader y no puede ser modificada.',
+                               textAlign: TextAlign.center,
+                               style: TextStyle(color: Colors.black54, fontStyle: FontStyle.italic, fontSize: 14),
                              ),
-                             child: const Text('Finalizar', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                           ),
-                         )
+                           )
+                         else
+                           Center(
+                             child: ElevatedButton(
+                               onPressed: _saving ? null : _saveTask,
+                               style: ElevatedButton.styleFrom(
+                                 backgroundColor: const Color(0xFFE51D2A),
+                                 foregroundColor: Colors.white,
+                                 shape: RoundedRectangleBorder(
+                                   borderRadius: BorderRadius.circular(24),
+                                 ),
+                                 padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
+                                 elevation: 0,
+                               ),
+                               child: Text(_saving ? 'Guardando...' : 'Finalizar', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                             ),
+                           )
                        ]
                      )
                    )

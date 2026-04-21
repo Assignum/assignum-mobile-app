@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:assignum/shared/presentation/widgets/ui.dart';
 import 'package:assignum/activities/domain/activity.dart';
+import 'package:assignum/activities/domain/activity_task.dart';
 import 'package:assignum/activities/infrastructure/activity_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -20,7 +21,7 @@ class _CreateActivityPageState extends State<CreateActivityPage> {
   final _taskCtrl = TextEditingController();
 
   DateTime? _dueDate;
-  final List<String> _tasks = [];
+  final List<ActivityTask> _tasks = [];
   bool _saving = false;
 
   @override
@@ -48,7 +49,7 @@ class _CreateActivityPageState extends State<CreateActivityPage> {
     final text = _taskCtrl.text.trim();
     if (text.isNotEmpty) {
       setState(() {
-        _tasks.add(text);
+        _tasks.add(ActivityTask(name: text));
         _taskCtrl.clear();
       });
     }
@@ -208,7 +209,7 @@ class _CreateActivityPageState extends State<CreateActivityPage> {
                           spacing: 8,
                           children: _tasks.asMap().entries.map((entry) {
                             return Chip(
-                              label: Text(entry.value),
+                              label: Text(entry.value.name),
                               onDeleted: () => _removeTask(entry.key),
                               deleteIconColor: Colors.redAccent,
                             );
