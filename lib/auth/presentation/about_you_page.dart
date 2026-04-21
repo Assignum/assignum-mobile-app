@@ -2,7 +2,6 @@ import 'package:assignum/auth/infrastructure/user_service.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:assignum/auth/domain/user_profile.dart';
-import 'package:assignum/shared/presentation/home_page.dart';
 import 'package:assignum/shared/presentation/widgets/ui.dart';
 
 class AboutYouPage extends StatefulWidget {
@@ -56,8 +55,8 @@ class _AboutYouPageState extends State<AboutYouPage> {
     await _userService.createOrUpdateProfile(profile);
 
     if (!mounted) return;
-    Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (_) => HomePage()),
+    Navigator.of(context).pushNamedAndRemoveUntil(
+      '/home',
           (_) => false,
     );
   }

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:assignum/auth/infrastructure/auth.dart';
 import 'package:assignum/auth/presentation/welcome_page.dart';
-import 'package:assignum/shared/presentation/home_page.dart';
+import 'package:assignum/core/presentation/home_page.dart';
 import 'package:assignum/auth/infrastructure/user_service.dart';
 import 'package:assignum/auth/presentation/about_you_page.dart';
 

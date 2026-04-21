@@ -3,8 +3,7 @@ import 'package:assignum/activities/domain/activity.dart';
 import 'package:assignum/shared/presentation/widgets/ui.dart';
 import 'package:assignum/activities/presentation/task_details_page.dart';
 import 'package:assignum/activities/presentation/member_task_page.dart';
-import 'package:assignum/auth/infrastructure/auth.dart';
-import 'package:assignum/auth/infrastructure/user_service.dart';
+import 'package:assignum/activities/domain/auth_facade.dart';
 
 class ActivityDetailsPage extends StatefulWidget {
   final Activity activity;
@@ -28,16 +27,16 @@ class _ActivityDetailsPageState extends State<ActivityDetailsPage> {
   }
 
   Future<void> _fetchLeaderName() async {
-    bool isLeaderSession = widget.activity.uid == Auth().currentUser?.uid;
+    bool isLeaderSession = widget.activity.uid == IAuthFacade.instance.currentUserId;
     if (isLeaderSession) {
       if (mounted) setState(() => _leaderName = 'Tú');
       return;
     }
     
-    final prof = await UserService().getProfile(widget.activity.uid);
+    final name = await IAuthFacade.instance.getUserName(widget.activity.uid);
     if (mounted) {
        setState(() {
-         _leaderName = prof?.fullName ?? 'Líder';
+         _leaderName = name ?? 'Líder';
        });
     }
   }
@@ -96,7 +95,7 @@ class _ActivityDetailsPageState extends State<ActivityDetailsPage> {
                bool isLeader = false;
                
                if (i == 0) {
-                 bool isSessionLeader = widget.activity.uid == Auth().currentUser?.uid;
+                 bool isSessionLeader = widget.activity.uid == IAuthFacade.instance.currentUserId;
                  memberText = isSessionLeader ? 'Tú (Líder)' : '$_leaderName (Líder)';
                  isLeader = true;
                } else if (i <= present.length) {
@@ -170,7 +169,7 @@ class _ActivityDetailsPageState extends State<ActivityDetailsPage> {
   Widget _buildTasksList() {
     final present = widget.activity.acceptedEmails.map((m) => widget.activity.memberNames[m.replaceAll('.', '_')] ?? m).toList();
     
-    bool isSessionLeader = widget.activity.uid == Auth().currentUser?.uid;
+    bool isSessionLeader = widget.activity.uid == IAuthFacade.instance.currentUserId;
     String leaderLabel = isSessionLeader ? 'Tú (Líder)' : '$_leaderName (Líder)';
     final allMembers = [leaderLabel, ...present, ...widget.activity.invitedEmails];
     
@@ -231,7 +230,7 @@ class _ActivityDetailsPageState extends State<ActivityDetailsPage> {
                      ),
                      ElevatedButton(
                         onPressed: () {
-                           bool isLeader = widget.activity.uid == Auth().currentUser?.uid;
+                           bool isLeader = widget.activity.uid == IAuthFacade.instance.currentUserId;
                            if (isLeader) {
                               Navigator.push(context, MaterialPageRoute(builder: (_) => TaskDetailsPage(
                                  activity: widget.activity,
