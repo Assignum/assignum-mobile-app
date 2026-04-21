@@ -1,11 +1,11 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:assignum/models/activity.dart';
+import 'package:assignum/activities/domain/activity.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:assignum/auth.dart';
-import 'package:assignum/services/user_service.dart';
+import 'package:assignum/auth/infrastructure/auth.dart';
+import 'package:assignum/auth/infrastructure/user_service.dart';
 
 // BANDERA PARA ACTIVAR O DESACTIVAR EL MODO LOCAL
 const bool USE_LOCAL_JSON = false; // CAMBIAR A FALSE PARA VOLVER A FIREBASE

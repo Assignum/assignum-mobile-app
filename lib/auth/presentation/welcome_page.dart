@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:assignum/pages/login_register_page.dart';
-import 'package:assignum/widgets/ui.dart';
+import 'package:assignum/auth/presentation/login_register_page.dart';
+import 'package:assignum/shared/presentation/widgets/ui.dart';
 
 class WelcomePage extends StatelessWidget {
   const WelcomePage({super.key});

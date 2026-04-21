@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:assignum/models/activity.dart';
-import 'package:assignum/widgets/ui.dart';
+import 'package:assignum/activities/domain/activity.dart';
+import 'package:assignum/shared/presentation/widgets/ui.dart';
 
 class MemberTaskPage extends StatefulWidget {
   final Activity activity;

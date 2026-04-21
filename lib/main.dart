@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:assignum/firebase_options.dart';
-import 'package:assignum/theme/app_theme.dart';
-import 'package:assignum/widget_tree.dart';
+import 'package:assignum/shared/infrastructure/firebase_options.dart';
+import 'package:assignum/shared/presentation/theme/app_theme.dart';
+import 'package:assignum/shared/presentation/widget_tree.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();

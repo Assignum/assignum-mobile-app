@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:assignum/services/activity_service.dart';
-import 'package:assignum/models/activity.dart';
+import 'package:assignum/activities/infrastructure/activity_service.dart';
+import 'package:assignum/activities/domain/activity.dart';
 
 class NotificationsPage extends StatefulWidget {
   const NotificationsPage({super.key});

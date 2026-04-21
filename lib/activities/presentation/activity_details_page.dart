@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:assignum/models/activity.dart';
-import 'package:assignum/widgets/ui.dart';
-import 'package:assignum/pages/task_details_page.dart';
-import 'package:assignum/pages/member_task_page.dart';
-import 'package:assignum/auth.dart';
-import 'package:assignum/services/user_service.dart';
+import 'package:assignum/activities/domain/activity.dart';
+import 'package:assignum/shared/presentation/widgets/ui.dart';
+import 'package:assignum/activities/presentation/task_details_page.dart';
+import 'package:assignum/activities/presentation/member_task_page.dart';
+import 'package:assignum/auth/infrastructure/auth.dart';
+import 'package:assignum/auth/infrastructure/user_service.dart';
 
 class ActivityDetailsPage extends StatefulWidget {
   final Activity activity;

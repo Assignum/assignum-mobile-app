@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:assignum/widgets/ui.dart';
-import 'package:assignum/models/activity.dart';
-import 'package:assignum/services/activity_service.dart';
+import 'package:assignum/shared/presentation/widgets/ui.dart';
+import 'package:assignum/activities/domain/activity.dart';
+import 'package:assignum/activities/infrastructure/activity_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:assignum/pages/invite_members_page.dart';
+import 'package:assignum/activities/presentation/invite_members_page.dart';
 
 class CreateActivityPage extends StatefulWidget {
   const CreateActivityPage({super.key});

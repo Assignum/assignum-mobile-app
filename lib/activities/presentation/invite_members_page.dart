@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:assignum/widgets/ui.dart';
-import 'package:assignum/services/activity_service.dart';
+import 'package:assignum/shared/presentation/widgets/ui.dart';
+import 'package:assignum/activities/infrastructure/activity_service.dart';
 
-import 'package:assignum/models/activity.dart';
-import 'package:assignum/pages/activity_details_page.dart';
+import 'package:assignum/activities/domain/activity.dart';
+import 'package:assignum/activities/presentation/activity_details_page.dart';
 
 class InviteMembersPage extends StatefulWidget {
   final Activity activity;

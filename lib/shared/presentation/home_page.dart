@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:assignum/services/user_service.dart';
-import 'package:assignum/models/user_profile.dart';
-import 'package:assignum/auth.dart';
-import 'package:assignum/pages/create_activity_page.dart';
-import 'package:assignum/pages/activities_list_page.dart';
-import 'package:assignum/pages/notifications_page.dart';
+import 'package:assignum/auth/infrastructure/user_service.dart';
+import 'package:assignum/auth/domain/user_profile.dart';
+import 'package:assignum/auth/infrastructure/auth.dart';
+import 'package:assignum/activities/presentation/create_activity_page.dart';
+import 'package:assignum/activities/presentation/activities_list_page.dart';
+import 'package:assignum/shared/presentation/notifications_page.dart';
 
 class HomePage extends StatelessWidget {
   HomePage({super.key});
