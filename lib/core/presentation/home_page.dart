@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:assignum/auth/infrastructure/user_service.dart';
-import 'package:assignum/auth/domain/user_profile.dart';
-import 'package:assignum/auth/infrastructure/auth.dart';
+import 'package:assignum/iam/infrastructure/user_service.dart';
+import 'package:assignum/iam/domain/user_profile.dart';
+import 'package:assignum/iam/infrastructure/auth.dart';
 import 'package:assignum/activities/presentation/create_activity_page.dart';
 import 'package:assignum/activities/presentation/activities_list_page.dart';
 import 'package:assignum/core/presentation/notifications_page.dart';

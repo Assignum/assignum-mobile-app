@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:assignum/auth/infrastructure/auth.dart';
-import 'package:assignum/auth/presentation/about_you_page.dart';
+import 'package:assignum/iam/infrastructure/auth.dart';
+import 'package:assignum/iam/presentation/about_you_page.dart';
 import 'package:assignum/shared/presentation/widgets/ui.dart';
 
 class LoginRegisterPage extends StatefulWidget {

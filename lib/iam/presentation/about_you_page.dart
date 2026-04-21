@@ -1,7 +1,7 @@
-import 'package:assignum/auth/infrastructure/user_service.dart';
+import 'package:assignum/iam/infrastructure/user_service.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:assignum/auth/domain/user_profile.dart';
+import 'package:assignum/iam/domain/user_profile.dart';
 import 'package:assignum/shared/presentation/widgets/ui.dart';
 
 class AboutYouPage extends StatefulWidget {

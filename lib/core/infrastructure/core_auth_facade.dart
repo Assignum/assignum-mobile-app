@@ -1,6 +1,6 @@
 import 'package:assignum/activities/domain/auth_facade.dart';
-import 'package:assignum/auth/infrastructure/auth.dart';
-import 'package:assignum/auth/infrastructure/user_service.dart';
+import 'package:assignum/iam/infrastructure/auth.dart';
+import 'package:assignum/iam/infrastructure/user_service.dart';
 
 class CoreAuthFacade implements IAuthFacade {
   @override

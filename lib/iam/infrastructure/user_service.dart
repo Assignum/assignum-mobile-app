@@ -1,5 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:assignum/auth/domain/user_profile.dart';
+import 'package:assignum/iam/domain/user_profile.dart';
 
 class UserService {
   final _col = FirebaseFirestore.instance.collection('users');

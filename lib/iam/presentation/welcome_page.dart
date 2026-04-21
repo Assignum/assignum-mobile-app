@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:assignum/auth/presentation/login_register_page.dart';
+import 'package:assignum/iam/presentation/login_register_page.dart';
 import 'package:assignum/shared/presentation/widgets/ui.dart';
 
 class WelcomePage extends StatelessWidget {
