@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:assignum/theme/app_theme.dart';
+import 'package:assignum/shared/presentation/theme/app_theme.dart';
 
 class CardContainer extends StatelessWidget {
   final Widget child;

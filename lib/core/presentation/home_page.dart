@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:assignum/services/user_service.dart';
-import 'package:assignum/models/user_profile.dart';
-import 'package:assignum/auth.dart';
-import 'package:assignum/pages/create_activity_page.dart';
-import 'package:assignum/pages/activities_list_page.dart';
-import 'package:assignum/pages/notifications_page.dart';
+import 'package:assignum/iam/infrastructure/user_service.dart';
+import 'package:assignum/iam/domain/user_profile.dart';
+import 'package:assignum/iam/infrastructure/auth.dart';
+import 'package:assignum/activities/presentation/create_activity_page.dart';
+import 'package:assignum/activities/presentation/activities_list_page.dart';
+import 'package:assignum/core/presentation/notifications_page.dart';
+import 'package:assignum/iam/presentation/profile_page.dart';
 
 class HomePage extends StatelessWidget {
   HomePage({super.key});
@@ -69,6 +70,7 @@ class HomePage extends StatelessWidget {
               }),
               _buildDrawerItem(title: 'Perfil', onTap: () {
                 Navigator.pop(context);
+                Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfilePage()));
               }),
               _buildDrawerItem(title: 'Notificaciones', onTap: () {
                 Navigator.pop(context);

@@ -1,11 +1,9 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:assignum/models/activity.dart';
+import 'package:assignum/activities/domain/activity.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:assignum/auth.dart';
-import 'package:assignum/services/user_service.dart';
+import 'package:assignum/activities/domain/auth_facade.dart';
 
 // BANDERA PARA ACTIVAR O DESACTIVAR EL MODO LOCAL
 const bool USE_LOCAL_JSON = false; // CAMBIAR A FALSE PARA VOLVER A FIREBASE
@@ -47,20 +45,21 @@ class ActivityService {
   }
 
   Future<List<Activity>> getActivities() async {
-    final User? user = Auth().currentUser;
-    if (user == null) return [];
+    final String? currentUserId = IAuthFacade.instance.currentUserId;
+    final String? currentUserEmail = IAuthFacade.instance.currentUserEmail;
+    if (currentUserId == null) return [];
 
     if (USE_LOCAL_JSON) {
       final all = await _readLocal();
       return all.where((a) {
-        bool isCreator = a.uid == user.uid;
-        bool isInvited = user.email != null && a.invitedEmails.contains(user.email);
+        bool isCreator = a.uid == currentUserId;
+        bool isInvited = currentUserEmail != null && a.invitedEmails.contains(currentUserEmail);
         return isCreator || isInvited;
       }).toList();
     } else {
-      final q1 = await _col.where('uid', isEqualTo: user.uid).get();
+      final q1 = await _col.where('uid', isEqualTo: currentUserId).get();
       // It's possible email is null if not authenticated via email, but assuming normal flow here:
-      final q2 = user.email != null ? await _col.where('acceptedEmails', arrayContains: user.email!).get() : null;
+      final q2 = currentUserEmail != null ? await _col.where('acceptedEmails', arrayContains: currentUserEmail).get() : null;
 
       final Map<String, Activity> uniqueActs = {};
       for (var doc in q1.docs) {
@@ -75,6 +74,20 @@ class ActivityService {
     }
   }
 
+  Stream<Activity?> getActivityStream(String id) {
+    if (USE_LOCAL_JSON) {
+      return Stream.fromFuture(_readLocal()).map((list) {
+         final idx = list.indexWhere((a) => a.id == id);
+         return idx == -1 ? null : list[idx];
+      });
+    } else {
+      return _col.doc(id).snapshots().map((snapshot) {
+        if (!snapshot.exists || snapshot.data() == null) return null;
+        return Activity.fromMap(snapshot.data()!);
+      });
+    }
+  }
+
   Future<void> createActivity(Activity a) async {
     if (USE_LOCAL_JSON) {
       final list = await _readLocal();
@@ -82,6 +95,19 @@ class ActivityService {
       await _writeLocal(list);
     } else {
       await _col.doc(a.id).set(a.toMap());
+    }
+  }
+
+  Future<void> updateActivity(Activity a) async {
+    if (USE_LOCAL_JSON) {
+      final list = await _readLocal();
+      final idx = list.indexWhere((item) => item.id == a.id);
+      if (idx != -1) {
+        list[idx] = a;
+        await _writeLocal(list);
+      }
+    } else {
+      await _col.doc(a.id).update(a.toMap());
     }
   }
 
@@ -105,32 +131,35 @@ class ActivityService {
   }
 
   Future<List<Activity>> getPendingInvitations() async {
-    final User? user = Auth().currentUser;
-    if (user == null || user.email == null || USE_LOCAL_JSON) return [];
-    final q = await _col.where('invitedEmails', arrayContains: user.email!).get();
+    final String? currentUserEmail = IAuthFacade.instance.currentUserEmail;
+    if (currentUserEmail == null || USE_LOCAL_JSON) return [];
+    final q = await _col.where('invitedEmails', arrayContains: currentUserEmail).get();
     return q.docs.map((d) => Activity.fromMap(d.data())).toList();
   }
 
   Future<void> acceptInvitation(String activityId) async {
-    final user = Auth().currentUser;
-    if (user == null || user.email == null || USE_LOCAL_JSON) return;
+    final currentUserId = IAuthFacade.instance.currentUserId;
+    final currentUserEmail = IAuthFacade.instance.currentUserEmail;
+    final currentUserDisplayName = IAuthFacade.instance.currentUserDisplayName;
+
+    if (currentUserId == null || currentUserEmail == null || USE_LOCAL_JSON) return;
     
     // Conseguir nombre real
-    final profile = await UserService().getProfile(user.uid);
-    final name = profile?.fullName ?? user.displayName ?? user.email!;
+    final fullName = await IAuthFacade.instance.getUserName(currentUserId);
+    final name = fullName ?? currentUserDisplayName ?? currentUserEmail;
 
     await _col.doc(activityId).update({
-      'invitedEmails': FieldValue.arrayRemove([user.email]),
-      'acceptedEmails': FieldValue.arrayUnion([user.email]),
-      'memberNames.${user.email!.replaceAll('.', '_')}': name, // Firebase won't accept periods in keys easily, replaced with _
+      'invitedEmails': FieldValue.arrayRemove([currentUserEmail]),
+      'acceptedEmails': FieldValue.arrayUnion([currentUserEmail]),
+      'memberNames.${currentUserEmail.replaceAll('.', '_')}': name, // Firebase won't accept periods in keys easily, replaced with _
     });
   }
 
   Future<void> declineInvitation(String activityId) async {
-    final user = Auth().currentUser;
-    if (user == null || user.email == null || USE_LOCAL_JSON) return;
+    final currentUserEmail = IAuthFacade.instance.currentUserEmail;
+    if (currentUserEmail == null || USE_LOCAL_JSON) return;
     await _col.doc(activityId).update({
-      'invitedEmails': FieldValue.arrayRemove([user.email])
+      'invitedEmails': FieldValue.arrayRemove([currentUserEmail])
     });
   }
 

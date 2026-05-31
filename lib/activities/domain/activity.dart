@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:assignum/activities/domain/activity_task.dart';
 
 class Activity {
   final String id;
@@ -6,7 +7,7 @@ class Activity {
   final String name;
   final DateTime dueDate;
   final String documentLink;
-  final List<String> tasks;
+  final List<ActivityTask> tasks;
   final List<String> invitedEmails;
   final List<String> acceptedEmails;
   final Map<String, String> memberNames;
@@ -30,7 +31,7 @@ class Activity {
       'name': name,
       'dueDate': dueDate.toIso8601String(),
       'documentLink': documentLink,
-      'tasks': tasks,
+      'tasks': tasks.map((e) => e.toMap()).toList(),
       'invitedEmails': invitedEmails,
       'acceptedEmails': acceptedEmails,
       'memberNames': memberNames,
@@ -44,7 +45,10 @@ class Activity {
       name: map['name'] ?? '',
       dueDate: DateTime.tryParse(map['dueDate'] ?? '') ?? DateTime.now(),
       documentLink: map['documentLink'] ?? '',
-      tasks: List<String>.from(map['tasks'] ?? []),
+      tasks: (map['tasks'] as List<dynamic>?)?.map((e) {
+        if (e is String) return ActivityTask(name: e);
+        return ActivityTask.fromMap(e as Map<String, dynamic>);
+      }).toList() ?? [],
       invitedEmails: List<String>.from(map['invitedEmails'] ?? []),
       acceptedEmails: List<String>.from(map['acceptedEmails'] ?? []),
       memberNames: Map<String, String>.from(map['memberNames'] ?? {}),

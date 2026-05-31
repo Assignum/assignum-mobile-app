@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:assignum/models/activity.dart';
-import 'package:assignum/services/activity_service.dart';
-import 'package:assignum/pages/activity_details_page.dart';
+import 'package:assignum/activities/domain/activity.dart';
+import 'package:assignum/activities/infrastructure/activity_service.dart';
+import 'package:assignum/activities/presentation/activity_details_page.dart';
 
 class ActivitiesListPage extends StatefulWidget {
   const ActivitiesListPage({super.key});
@@ -29,6 +29,12 @@ class _ActivitiesListPageState extends State<ActivitiesListPage> {
         _loading = false;
       });
     }
+  }
+
+  int _calculateProgress(Activity act) {
+    if (act.tasks.isEmpty) return 0;
+    int verified = act.tasks.where((t) => t.status == 'Verificado').length;
+    return ((verified / act.tasks.length) * 100).toInt();
   }
 
   Future<void> _delete(String id) async {
@@ -80,10 +86,10 @@ class _ActivitiesListPageState extends State<ActivitiesListPage> {
                              children: [
                                Text(act.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16), overflow: TextOverflow.ellipsis),
                                const SizedBox(height: 4),
-                               const Row(
+                               Row(
                                  children: [
-                                    Text('Progreso: ', style: TextStyle(fontSize: 14)),
-                                    Text('0%', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+                                    const Text('Progreso: ', style: TextStyle(fontSize: 14)),
+                                    Text('${_calculateProgress(act)}%', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
                                  ]
                                )
                              ]
@@ -93,7 +99,8 @@ class _ActivitiesListPageState extends State<ActivitiesListPage> {
                            children: [
                              ElevatedButton(
                                 onPressed: () {
-                                   Navigator.push(context, MaterialPageRoute(builder: (_) => ActivityDetailsPage(activity: act, isCreationFlow: false)));
+                                   Navigator.push(context, MaterialPageRoute(builder: (_) => ActivityDetailsPage(activity: act, isCreationFlow: false)))
+                                      .then((_) => _load());
                                 },
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: const Color(0xFFE51D2A),

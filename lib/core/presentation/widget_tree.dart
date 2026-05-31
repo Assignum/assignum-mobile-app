@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:assignum/auth.dart';
-import 'package:assignum/pages/welcome_page.dart';
-import 'package:assignum/pages/home_page.dart';
-import 'package:assignum/services/user_service.dart';
-import 'package:assignum/pages/about_you_page.dart';
+import 'package:assignum/iam/infrastructure/auth.dart';
+import 'package:assignum/iam/presentation/welcome_page.dart';
+import 'package:assignum/core/presentation/home_page.dart';
+import 'package:assignum/iam/infrastructure/user_service.dart';
+import 'package:assignum/iam/presentation/about_you_page.dart';
 
 class WidgetTree extends StatelessWidget {
   const WidgetTree({super.key});
