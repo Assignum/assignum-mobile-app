@@ -6,6 +6,7 @@ import 'package:assignum/activities/infrastructure/activity_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:assignum/activities/presentation/invite_members_page.dart';
+import 'package:assignum/shared/presentation/widgets/premium_app_bar.dart';
 
 class CreateActivityPage extends StatefulWidget {
   const CreateActivityPage({super.key});
@@ -127,19 +128,9 @@ class _CreateActivityPageState extends State<CreateActivityPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Crear Actividad', style: TextStyle(color: Colors.white, fontSize: 18)),
-        backgroundColor: Colors.grey[600],
-        iconTheme: const IconThemeData(color: Colors.white),
-        actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 16.0),
-            child: CircleAvatar(
-              backgroundColor: Colors.grey[300],
-              radius: 16,
-            ),
-          )
-        ],
+      appBar: const PremiumAppBar(
+        titleText: 'Crear Actividad',
+        showProfileAvatar: true,
       ),
       body: SafeArea(
         child: SingleChildScrollView(

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:assignum/iam/domain/user_profile.dart';
 import 'package:assignum/shared/presentation/widgets/ui.dart';
+import 'package:assignum/shared/presentation/widgets/premium_app_bar.dart';
 
 class AboutYouPage extends StatefulWidget {
   final String fullName;
@@ -64,7 +65,7 @@ class _AboutYouPageState extends State<AboutYouPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Háblanos de ti')),
+      appBar: const PremiumAppBar(titleText: 'Háblanos de ti'),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),

@@ -3,6 +3,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:assignum/iam/infrastructure/auth.dart';
 import 'package:assignum/iam/presentation/about_you_page.dart';
 import 'package:assignum/shared/presentation/widgets/ui.dart';
+import 'package:assignum/shared/presentation/widgets/premium_app_bar.dart';
+import 'package:assignum/iam/presentation/forgot_password_page.dart';
 
 class LoginRegisterPage extends StatefulWidget {
   final bool initialIsLogin;
@@ -84,29 +86,12 @@ class _LoginRegisterPageState extends State<LoginRegisterPage> {
     }
   }
 
-  Future<void> _resetPassword() async {
-    if (_emailCtrl.text.trim().isEmpty) {
-      setState(() => errorMessage = 'Ingresa tu correo para recuperar contraseña.');
-      return;
-    }
-    try {
-      await Auth().sendPasswordResetEmail(email: _emailCtrl.text.trim());
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Te enviamos un correo para restablecer la contraseña.')),
-        );
-      }
-    } on FirebaseAuthException catch (e) {
-      setState(() => errorMessage = e.message);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final title = isLogin ? 'Inicia sesión' : 'Regístrate';
 
     return Scaffold(
-      appBar: AppBar(title: Text(title)),
+      appBar: PremiumAppBar(titleText: title),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
@@ -192,7 +177,16 @@ class _LoginRegisterPageState extends State<LoginRegisterPage> {
                       ),
                       if (isLogin)
                         TextButton(
-                          onPressed: _resetPassword,
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => ForgotPasswordPage(
+                                  initialEmail: _emailCtrl.text.trim(),
+                                ),
+                              ),
+                            );
+                          },
                           child: const Text('¿Olvidaste tu contraseña?'),
                         ),
                     ],

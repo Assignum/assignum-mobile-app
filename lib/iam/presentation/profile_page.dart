@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:assignum/iam/infrastructure/user_service.dart';
 import 'package:assignum/iam/domain/user_profile.dart';
 import 'package:assignum/shared/presentation/widgets/ui.dart';
+import 'package:assignum/shared/presentation/widgets/premium_app_bar.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -147,11 +148,8 @@ class _ProfilePageState extends State<ProfilePage> {
     final email = user?.email ?? 'No email';
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Perfiles', style: TextStyle(color: Colors.white, fontSize: 18)),
-        backgroundColor: Colors.grey[600],
-        iconTheme: const IconThemeData(color: Colors.white),
-        centerTitle: true,
+      appBar: const PremiumAppBar(
+        titleText: 'Perfiles',
       ),
       body: SafeArea(
         child: SingleChildScrollView(

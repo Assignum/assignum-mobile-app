@@ -6,6 +6,7 @@ import 'package:assignum/activities/presentation/member_task_page.dart';
 import 'package:assignum/activities/domain/auth_facade.dart';
 import 'package:assignum/activities/domain/activity_task.dart';
 import 'package:assignum/activities/infrastructure/activity_service.dart';
+import 'package:assignum/shared/presentation/widgets/premium_app_bar.dart';
 
 class ActivityDetailsPage extends StatefulWidget {
   final Activity activity;
@@ -302,19 +303,9 @@ class _ActivityDetailsPageState extends State<ActivityDetailsPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Tus Actividades', style: TextStyle(color: Colors.white, fontSize: 18)),
-        backgroundColor: Colors.grey[600],
-        iconTheme: const IconThemeData(color: Colors.white),
-        actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 16.0),
-            child: CircleAvatar(
-               backgroundColor: Colors.grey[300],
-               radius: 16,
-            ),
-          )
-        ],
+      appBar: const PremiumAppBar(
+        titleText: 'Tus Actividades',
+        showProfileAvatar: true,
       ),
       body: SafeArea(
         child: StreamBuilder<Activity?>(

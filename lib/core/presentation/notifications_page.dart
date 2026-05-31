@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:assignum/activities/infrastructure/activity_service.dart';
 import 'package:assignum/activities/domain/activity.dart';
+import 'package:assignum/shared/presentation/widgets/premium_app_bar.dart';
 
 class NotificationsPage extends StatefulWidget {
   const NotificationsPage({super.key});
@@ -45,10 +46,8 @@ class _NotificationsPageState extends State<NotificationsPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Notificaciones', style: TextStyle(color: Colors.white, fontSize: 18)),
-        backgroundColor: Colors.grey[600],
-        iconTheme: const IconThemeData(color: Colors.white),
+      appBar: const PremiumAppBar(
+        titleText: 'Notificaciones',
       ),
       body: SafeArea(
         child: Padding(

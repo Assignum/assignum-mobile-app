@@ -4,6 +4,7 @@ import 'package:assignum/activities/domain/activity_task.dart';
 import 'package:assignum/activities/infrastructure/activity_service.dart';
 import 'package:assignum/shared/presentation/widgets/ui.dart';
 import 'package:assignum/activities/presentation/member_task_page.dart';
+import 'package:assignum/shared/presentation/widgets/premium_app_bar.dart';
 
 class TaskDetailsPage extends StatefulWidget {
   final Activity activity;
@@ -90,19 +91,9 @@ class _TaskDetailsPageState extends State<TaskDetailsPage> {
     final dateStr = '${widget.activity.dueDate.day.toString().padLeft(2,'0')}/${widget.activity.dueDate.month.toString().padLeft(2,'0')}/${widget.activity.dueDate.year.toString().substring(2)}';
     
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Tus Actividades', style: TextStyle(color: Colors.white, fontSize: 18)),
-        backgroundColor: Colors.grey[600],
-        iconTheme: const IconThemeData(color: Colors.white),
-        actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 16.0),
-            child: CircleAvatar(
-               backgroundColor: Colors.grey[300],
-               radius: 16,
-            ),
-          )
-        ],
+      appBar: const PremiumAppBar(
+        titleText: 'Tus Actividades',
+        showProfileAvatar: true,
       ),
       body: SafeArea(
         child: Padding(
