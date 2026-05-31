@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:assignum/shared/presentation/widgets/ui.dart';
 import 'package:assignum/activities/infrastructure/activity_service.dart';
-
 import 'package:assignum/activities/domain/activity.dart';
 import 'package:assignum/activities/presentation/activity_details_page.dart';
+import 'package:assignum/shared/presentation/widgets/premium_app_bar.dart';
 
 class InviteMembersPage extends StatefulWidget {
   final Activity activity;
@@ -131,19 +131,9 @@ class _InviteMembersPageState extends State<InviteMembersPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Crear Actividad', style: TextStyle(color: Colors.white, fontSize: 18)),
-        backgroundColor: Colors.grey[600],
-        iconTheme: const IconThemeData(color: Colors.white),
-        actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 16.0),
-            child: CircleAvatar(
-              backgroundColor: Colors.grey[300],
-              radius: 16,
-            ),
-          )
-        ],
+      appBar: const PremiumAppBar(
+        titleText: 'Crear Actividad',
+        showProfileAvatar: true,
       ),
       body: SafeArea(
         child: SingleChildScrollView(

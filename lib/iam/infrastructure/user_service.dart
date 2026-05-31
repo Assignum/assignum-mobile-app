@@ -18,4 +18,11 @@ class UserService {
     if (!doc.exists) return null;
     return UserProfile.fromMap(doc.data()!);
   }
+
+  Stream<UserProfile?> getProfileStream(String uid) {
+    return _col.doc(uid).snapshots().map((doc) {
+      if (!doc.exists || doc.data() == null) return null;
+      return UserProfile.fromMap(doc.data()!);
+    });
+  }
 }
