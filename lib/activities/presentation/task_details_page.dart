@@ -104,7 +104,7 @@ class _TaskDetailsPageState extends State<TaskDetailsPage> {
                Container(
                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
                  decoration: BoxDecoration(
-                   color: Colors.black.withOpacity(0.12),
+                   color: Colors.black.withValues(alpha: 0.12),
                    borderRadius: BorderRadius.circular(30),
                  ),
                  child: Row(
@@ -152,7 +152,7 @@ class _TaskDetailsPageState extends State<TaskDetailsPage> {
                  child: Container(
                    padding: const EdgeInsets.all(24),
                    decoration: BoxDecoration(
-                     color: Colors.black.withOpacity(0.08),
+                     color: Colors.black.withValues(alpha: 0.08),
                      borderRadius: BorderRadius.circular(30),
                    ),
                    child: SingleChildScrollView(

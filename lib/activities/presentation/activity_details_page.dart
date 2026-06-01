@@ -46,6 +46,104 @@ class _ActivityDetailsPageState extends State<ActivityDetailsPage> {
     }
   }
 
+  Future<void> _finalizeActivity(BuildContext context) async {
+    final progress = _calculateProgress();
+
+    if (progress == 100) {
+      await _doFinalizeActivity(context);
+    } else {
+      if (!context.mounted) return;
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Text('¿Finalizar actividad?', style: TextStyle(fontWeight: FontWeight.bold)),
+          content: Text(
+            'La actividad se encuentra al $progress% de progreso. ¿Estás seguro de que deseas finalizarla de todas formas?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancelar'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                Navigator.pop(ctx);
+                await _doFinalizeActivity(context);
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFE51D2A),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                elevation: 0,
+              ),
+              child: const Text('Finalizar'),
+            ),
+          ],
+        ),
+      );
+    }
+  }
+
+  Future<void> _doFinalizeActivity(BuildContext context) async {
+    final updated = Activity(
+      id: _currentActivity.id,
+      uid: _currentActivity.uid,
+      name: _currentActivity.name,
+      dueDate: _currentActivity.dueDate,
+      documentLink: _currentActivity.documentLink,
+      tasks: _currentActivity.tasks,
+      invitedEmails: _currentActivity.invitedEmails,
+      acceptedEmails: _currentActivity.acceptedEmails,
+      memberNames: _currentActivity.memberNames,
+      finalized: true,
+    );
+    await ActivityService().updateActivity(updated);
+
+    if (!context.mounted) return;
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        child: Padding(
+          padding: const EdgeInsets.all(28),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.check_circle_rounded, color: Color(0xFFE51D2A), size: 56),
+              const SizedBox(height: 16),
+              const Text('Actividad finalizada', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              Text(
+                '"${_currentActivity.name}" ha sido marcada como finalizada.',
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 14, color: Colors.black54),
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    Navigator.pop(context);
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFE51D2A),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    elevation: 0,
+                  ),
+                  child: const Text('Aceptar'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   int _calculateProgress() {
     if (_currentActivity.tasks.isEmpty) return 0;
     int verified = _currentActivity.tasks.where((t) => t.status == 'Verificado').length;
@@ -121,7 +219,7 @@ class _ActivityDetailsPageState extends State<ActivityDetailsPage> {
                  margin: const EdgeInsets.only(bottom: 12),
                  padding: const EdgeInsets.only(left: 20, right: 8, top: 4, bottom: 4),
                  decoration: BoxDecoration(
-                   color: Colors.black.withOpacity(0.08),
+                   color: Colors.black.withValues(alpha: 0.08),
                    borderRadius: BorderRadius.circular(30),
                  ),
                  child: Row(
@@ -238,7 +336,7 @@ class _ActivityDetailsPageState extends State<ActivityDetailsPage> {
                  margin: const EdgeInsets.only(bottom: 12),
                  padding: const EdgeInsets.only(left: 20, right: 8, top: 4, bottom: 4),
                  decoration: BoxDecoration(
-                   color: Colors.black.withOpacity(0.08),
+                   color: Colors.black.withValues(alpha: 0.08),
                    borderRadius: BorderRadius.circular(30),
                  ),
                  child: Row(
@@ -323,7 +421,7 @@ class _ActivityDetailsPageState extends State<ActivityDetailsPage> {
                    Container(
                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
                      decoration: BoxDecoration(
-                       color: Colors.black.withOpacity(0.12),
+                       color: Colors.black.withValues(alpha: 0.12),
                        borderRadius: BorderRadius.circular(30),
                      ),
                      child: Column(
@@ -353,6 +451,40 @@ class _ActivityDetailsPageState extends State<ActivityDetailsPage> {
                           ),
                           const SizedBox(height: 8),
                           Text('Team Leader: $_leaderName', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                          if (_currentActivity.finalized) ...[
+                            const SizedBox(height: 10),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF2E7D32).withValues(alpha: 0.15),
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: const Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.check_circle_rounded, color: Color(0xFF2E7D32), size: 16),
+                                  SizedBox(width: 6),
+                                  Text('Actividad Finalizada', style: TextStyle(color: Color(0xFF2E7D32), fontSize: 12, fontWeight: FontWeight.bold)),
+                                ],
+                              ),
+                            ),
+                          ] else if (_currentActivity.uid == IAuthFacade.instance.currentUserId) ...[
+                            const SizedBox(height: 12),
+                            SizedBox(
+                              width: double.infinity,
+                              child: ElevatedButton(
+                                onPressed: () => _finalizeActivity(context),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFFE51D2A),
+                                  foregroundColor: Colors.white,
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                                  padding: const EdgeInsets.symmetric(vertical: 10),
+                                  elevation: 0,
+                                ),
+                                child: const Text('Finalizar actividad', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+                              ),
+                            ),
+                          ],
                        ]
                      )
                    ),

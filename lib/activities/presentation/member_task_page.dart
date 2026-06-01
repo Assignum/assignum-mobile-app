@@ -125,7 +125,7 @@ class _MemberTaskPageState extends State<MemberTaskPage> {
   Widget _buildTextField(TextEditingController ctrl, {int maxLines = 1, bool enabled = true}) {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.08),
+        color: Colors.black.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(20),
       ),
       child: TextField(
@@ -158,7 +158,7 @@ class _MemberTaskPageState extends State<MemberTaskPage> {
                Container(
                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
                  decoration: BoxDecoration(
-                   color: Colors.black.withOpacity(0.12),
+                   color: Colors.black.withValues(alpha: 0.12),
                    borderRadius: BorderRadius.circular(30),
                  ),
                  child: Column(
@@ -178,7 +178,7 @@ class _MemberTaskPageState extends State<MemberTaskPage> {
                  child: Container(
                    padding: const EdgeInsets.all(24),
                    decoration: BoxDecoration(
-                     color: Colors.black.withOpacity(0.08),
+                     color: Colors.black.withValues(alpha: 0.08),
                      borderRadius: BorderRadius.circular(30),
                    ),
                    child: SingleChildScrollView(
@@ -190,7 +190,7 @@ class _MemberTaskPageState extends State<MemberTaskPage> {
                            height: 45,
                            padding: const EdgeInsets.symmetric(horizontal: 16),
                            decoration: BoxDecoration(
-                             color: Colors.black.withOpacity(0.08),
+                             color: Colors.black.withValues(alpha: 0.08),
                              borderRadius: BorderRadius.circular(20),
                            ),
                            child: DropdownButtonHideUnderline(

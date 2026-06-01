@@ -11,6 +11,7 @@ class Activity {
   final List<String> invitedEmails;
   final List<String> acceptedEmails;
   final Map<String, String> memberNames;
+  final bool finalized;
 
   Activity({
     required this.id,
@@ -22,6 +23,7 @@ class Activity {
     this.invitedEmails = const [],
     this.acceptedEmails = const [],
     this.memberNames = const {},
+    this.finalized = false,
   });
 
   Map<String, dynamic> toMap() {
@@ -35,6 +37,7 @@ class Activity {
       'invitedEmails': invitedEmails,
       'acceptedEmails': acceptedEmails,
       'memberNames': memberNames,
+      'finalized': finalized,
     };
   }
 
@@ -52,6 +55,7 @@ class Activity {
       invitedEmails: List<String>.from(map['invitedEmails'] ?? []),
       acceptedEmails: List<String>.from(map['acceptedEmails'] ?? []),
       memberNames: Map<String, String>.from(map['memberNames'] ?? {}),
+      finalized: map['finalized'] ?? false,
     );
   }
 }
