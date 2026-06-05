@@ -1,17 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:assignum/activities/domain/activity.dart';
+import 'package:assignum/core/infrastructure/api_client.dart';
 import 'package:assignum/shared/presentation/widgets/ui.dart';
 import 'package:assignum/activities/presentation/task_details_page.dart';
 import 'package:assignum/activities/presentation/member_task_page.dart';
 import 'package:assignum/activities/domain/auth_facade.dart';
-import 'package:assignum/activities/domain/activity_task.dart';
 import 'package:assignum/activities/infrastructure/activity_service.dart';
 import 'package:assignum/shared/presentation/widgets/premium_app_bar.dart';
 
 class ActivityDetailsPage extends StatefulWidget {
   final Activity activity;
   final bool isCreationFlow;
-  
+
   const ActivityDetailsPage({super.key, required this.activity, this.isCreationFlow = false});
 
   @override
@@ -32,23 +32,21 @@ class _ActivityDetailsPageState extends State<ActivityDetailsPage> {
   }
 
   Future<void> _fetchLeaderName() async {
-    bool isLeaderSession = _currentActivity.uid == IAuthFacade.instance.currentUserId;
-    if (isLeaderSession) {
+    if (_currentActivity.uid == IAuthFacade.instance.currentUserId) {
       if (mounted) setState(() => _leaderName = 'Tú');
       return;
     }
-    
     final name = await IAuthFacade.instance.getUserName(_currentActivity.uid);
-    if (mounted) {
-       setState(() {
-         _leaderName = name ?? 'Líder';
-       });
-    }
+    if (mounted) setState(() => _leaderName = name ?? 'Líder');
+  }
+
+  Future<void> _refresh() async {
+    final updated = await ActivityService().getActivity(_currentActivity.id);
+    if (mounted && updated != null) setState(() => _currentActivity = updated);
   }
 
   Future<void> _finalizeActivity(BuildContext context) async {
     final progress = _calculateProgress();
-
     if (progress == 100) {
       await _doFinalizeActivity(context);
     } else {
@@ -58,25 +56,12 @@ class _ActivityDetailsPageState extends State<ActivityDetailsPage> {
         builder: (ctx) => AlertDialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
           title: const Text('¿Finalizar actividad?', style: TextStyle(fontWeight: FontWeight.bold)),
-          content: Text(
-            'La actividad se encuentra al $progress% de progreso. ¿Estás seguro de que deseas finalizarla de todas formas?',
-          ),
+          content: Text('La actividad se encuentra al $progress% de progreso. ¿Estás seguro?'),
           actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cancelar'),
-            ),
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
             ElevatedButton(
-              onPressed: () async {
-                Navigator.pop(ctx);
-                await _doFinalizeActivity(context);
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFE51D2A),
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                elevation: 0,
-              ),
+              onPressed: () async { Navigator.pop(ctx); await _doFinalizeActivity(context); },
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFE51D2A), foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), elevation: 0),
               child: const Text('Finalizar'),
             ),
           ],
@@ -86,19 +71,15 @@ class _ActivityDetailsPageState extends State<ActivityDetailsPage> {
   }
 
   Future<void> _doFinalizeActivity(BuildContext context) async {
-    final updated = Activity(
-      id: _currentActivity.id,
-      uid: _currentActivity.uid,
-      name: _currentActivity.name,
-      dueDate: _currentActivity.dueDate,
-      documentLink: _currentActivity.documentLink,
-      tasks: _currentActivity.tasks,
-      invitedEmails: _currentActivity.invitedEmails,
-      acceptedEmails: _currentActivity.acceptedEmails,
-      memberNames: _currentActivity.memberNames,
-      finalized: true,
-    );
-    await ActivityService().updateActivity(updated);
+    try {
+      await ActivityService().finalizeActivity(_currentActivity.id);
+    } on ApiException catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+      }
+      return;
+    }
+    await _refresh();
 
     if (!context.mounted) return;
     showDialog(
@@ -115,25 +96,13 @@ class _ActivityDetailsPageState extends State<ActivityDetailsPage> {
               const SizedBox(height: 16),
               const Text('Actividad finalizada', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
-              Text(
-                '"${_currentActivity.name}" ha sido marcada como finalizada.',
-                textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 14, color: Colors.black54),
-              ),
+              Text('"${_currentActivity.name}" ha sido marcada como finalizada.', textAlign: TextAlign.center, style: const TextStyle(fontSize: 14, color: Colors.black54)),
               const SizedBox(height: 24),
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  onPressed: () {
-                    Navigator.pop(ctx);
-                    Navigator.pop(context);
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFE51D2A),
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    elevation: 0,
-                  ),
+                  onPressed: () { Navigator.pop(ctx); Navigator.pop(context); },
+                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFE51D2A), foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), elevation: 0),
                   child: const Text('Aceptar'),
                 ),
               ),
@@ -154,103 +123,66 @@ class _ActivityDetailsPageState extends State<ActivityDetailsPage> {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (BuildContext ctx) {
-        return Dialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-          child: Padding(
-            padding: const EdgeInsets.all(24.0),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text(
-                  'Tareas Divididas\nExitosamente',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 24),
-                PrimaryButton(
-                  text: 'Siguiente',
-                  onPressed: () {
-                    Navigator.pop(ctx); 
-                    setState(() {
-                      _showTasks = true;
-                    });
-                  },
-                )
-              ],
-            ),
+      builder: (ctx) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        child: Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('Tareas Divididas\nExitosamente', textAlign: TextAlign.center, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 24),
+              PrimaryButton(text: 'Siguiente', onPressed: () { Navigator.pop(ctx); setState(() => _showTasks = true); }),
+            ],
           ),
-        );
-      },
+        ),
+      ),
     );
   }
 
   Widget _buildMembersList() {
     final present = _currentActivity.acceptedEmails;
     final pending = _currentActivity.invitedEmails;
-    
+
     return Column(
       children: [
         const Text('Lista de Miembros', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
         const SizedBox(height: 16),
         Expanded(
           child: ListView.builder(
-            itemCount: present.length + pending.length + 1, 
+            itemCount: present.length + pending.length + 1,
             itemBuilder: (ctx, i) {
-               String memberText = '';
-               bool isLeader = false;
-               
-               if (i == 0) {
-                 bool isSessionLeader = _currentActivity.uid == IAuthFacade.instance.currentUserId;
-                 memberText = isSessionLeader ? 'Tú (Líder)' : '$_leaderName (Líder)';
-                 isLeader = true;
-               } else if (i <= present.length) {
-                 final m = present[i - 1];
-                 final name = _currentActivity.memberNames[m.replaceAll('.', '_')] ?? m;
-                 memberText = name;
-               } else {
-                 final m = pending[i - 1 - present.length];
-                 memberText = '$m (Pendiente)';
-               }
-               return Container(
-                 margin: const EdgeInsets.only(bottom: 12),
-                 padding: const EdgeInsets.only(left: 20, right: 8, top: 4, bottom: 4),
-                 decoration: BoxDecoration(
-                   color: Colors.black.withValues(alpha: 0.08),
-                   borderRadius: BorderRadius.circular(30),
-                 ),
-                 child: Row(
-                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                   children: [
-                     Expanded(
-                       child: Text(
-                         memberText, 
-                         style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                         overflow: TextOverflow.ellipsis,
-                       ),
-                     ),
-                     if (!isLeader)
-                       ElevatedButton(
+              String memberText = '';
+              bool isLeader = false;
+              if (i == 0) {
+                memberText = _currentActivity.uid == IAuthFacade.instance.currentUserId ? 'Tú (Líder)' : '$_leaderName (Líder)';
+                isLeader = true;
+              } else if (i <= present.length) {
+                final m = present[i - 1];
+                final name = _currentActivity.memberNames[m] ?? _currentActivity.memberNames[m.replaceAll('.', '_')] ?? m;
+                memberText = name;
+              } else {
+                memberText = '${pending[i - 1 - present.length]} (Pendiente)';
+              }
+              return Container(
+                margin: const EdgeInsets.only(bottom: 12),
+                padding: const EdgeInsets.only(left: 20, right: 8, top: 4, bottom: 4),
+                decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(30)),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(child: Text(memberText, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16), overflow: TextOverflow.ellipsis)),
+                    if (!isLeader)
+                      ElevatedButton(
                         onPressed: () {},
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFFE51D2A),
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          minimumSize: const Size(60, 36),
-                          elevation: 0,
-                        ),
+                        style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFE51D2A), foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)), minimumSize: const Size(60, 36), elevation: 0),
                         child: const Text('Ver', style: TextStyle(fontWeight: FontWeight.bold)),
-                     )
-                   ]
-                 )
-               );
-            }
-          )
+                      ),
+                  ],
+                ),
+              );
+            },
+          ),
         ),
         if (widget.isCreationFlow) ...[
           const SizedBox(height: 16),
@@ -258,248 +190,159 @@ class _ActivityDetailsPageState extends State<ActivityDetailsPage> {
             width: double.infinity,
             child: ElevatedButton(
               onPressed: _currentActivity.tasks.isEmpty ? null : () async {
-                final presentEmails = _currentActivity.acceptedEmails;
-                final leaderEmail = IAuthFacade.instance.currentUserEmail ?? _currentActivity.uid;
-                final allEmails = [leaderEmail, ...presentEmails, ..._currentActivity.invitedEmails];
-
-                for (int i = 0; i < _currentActivity.tasks.length; i++) {
-                  _currentActivity.tasks[i] = _currentActivity.tasks[i].copyWith(
-                    assignedToEmail: allEmails[i % allEmails.length],
-                  );
-                }
-                
-                await ActivityService().updateActivity(_currentActivity);
+                await ActivityService().assignTasks(_currentActivity.id);
+                await _refresh();
                 _showSuccessDialog();
               },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFE51D2A),
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(24),
-                ),
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                elevation: 0,
-              ),
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFE51D2A), foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)), padding: const EdgeInsets.symmetric(vertical: 14), elevation: 0),
               child: const Text('Dividir Tareas', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
             ),
-          )
-        ]
-      ]
+          ),
+        ],
+      ],
     );
   }
 
   Widget _buildTasksList() {
-    bool isSessionLeader = _currentActivity.uid == IAuthFacade.instance.currentUserId;
+    final isLeader = _currentActivity.uid == IAuthFacade.instance.currentUserId;
     final currentUserEmail = IAuthFacade.instance.currentUserEmail;
+    final displayTasks = _currentActivity.tasks;
 
-    List<ActivityTask> displayTasks = _currentActivity.tasks;
-    
     return Column(
       children: [
         Row(
-           mainAxisAlignment: MainAxisAlignment.spaceBetween,
-           children: [
-              const Text('Puntos a realizar', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-              ElevatedButton(
-                onPressed: () => setState(() => _showTasks = false),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFE51D2A),
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                  minimumSize: const Size(60, 32),
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
-                  elevation: 0,
-                ),
-                child: const Text('Miembros', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-              )
-           ],
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text('Puntos a realizar', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            ElevatedButton(
+              onPressed: () => setState(() => _showTasks = false),
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFE51D2A), foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)), minimumSize: const Size(60, 32), padding: const EdgeInsets.symmetric(horizontal: 16), elevation: 0),
+              child: const Text('Miembros', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+            ),
+          ],
         ),
         const SizedBox(height: 16),
         Expanded(
           child: ListView.builder(
-            itemCount: displayTasks.length, 
+            itemCount: displayTasks.length,
             itemBuilder: (ctx, i) {
-               final task = displayTasks[i];
-               String taskName = task.name;
-               String assignedToEmail = task.assignedToEmail;
-               String displayName = assignedToEmail;
+              final task = displayTasks[i];
+              String displayName = task.assignedToEmail;
+              if (task.assignedToEmail == currentUserEmail) {
+                displayName = isLeader ? 'Tú (Líder)' : 'Tú';
+              } else if (!_currentActivity.invitedEmails.contains(task.assignedToEmail) && !_currentActivity.acceptedEmails.contains(task.assignedToEmail)) {
+                displayName = '$_leaderName (Líder)';
+              } else {
+                displayName = _currentActivity.memberNames[task.assignedToEmail] ?? _currentActivity.memberNames[task.assignedToEmail.replaceAll('.', '_')] ?? task.assignedToEmail;
+              }
 
-               if (assignedToEmail == currentUserEmail) {
-                   displayName = isSessionLeader ? 'Tú (Líder)' : 'Tú';
-               } else if (!_currentActivity.invitedEmails.contains(assignedToEmail) && !_currentActivity.acceptedEmails.contains(assignedToEmail)) {
-                   displayName = '$_leaderName (Líder)';
-               } else {
-                   displayName = _currentActivity.memberNames[assignedToEmail.replaceAll('.', '_')] ?? assignedToEmail;
-               }
-
-               return Container(
-                 margin: const EdgeInsets.only(bottom: 12),
-                 padding: const EdgeInsets.only(left: 20, right: 8, top: 4, bottom: 4),
-                 decoration: BoxDecoration(
-                   color: Colors.black.withValues(alpha: 0.08),
-                   borderRadius: BorderRadius.circular(30),
-                 ),
-                 child: Row(
-                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                   children: [
-                     Expanded(
-                       child: Column(
-                         crossAxisAlignment: CrossAxisAlignment.start,
-                         mainAxisAlignment: MainAxisAlignment.center,
-                         children: [
-                           Text(
-                             taskName, 
-                             style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                             overflow: TextOverflow.ellipsis,
-                           ),
-                           Text(
-                             'Asignada a: $displayName',
-                             style: const TextStyle(fontSize: 13, color: Colors.black87),
-                             overflow: TextOverflow.ellipsis,
-                           ),
-                         ]
-                       )
-                     ),
-                     if (isSessionLeader || assignedToEmail == currentUserEmail)
-                       ElevatedButton(
-                          onPressed: () {
-                             if (isSessionLeader) {
-                                Navigator.push(context, MaterialPageRoute(builder: (_) => TaskDetailsPage(
-                                   activity: _currentActivity,
-                                   task: task,
-                                   assigneeName: displayName,
-                                )));
-                             } else {
-                                Navigator.push(context, MaterialPageRoute(builder: (_) => MemberTaskPage(
-                                   activity: _currentActivity,
-                                   task: task,
-                                   assigneeName: displayName,
-                                )));
-                             }
-                          },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFFE51D2A),
-                            foregroundColor: Colors.white,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                            minimumSize: const Size(60, 36),
-                            elevation: 0,
-                          ),
-                          child: const Text('Ver', style: TextStyle(fontWeight: FontWeight.bold)),
-                       )
-                   ]
-                 )
-               );
-            }
-          )
+              return Container(
+                margin: const EdgeInsets.only(bottom: 12),
+                padding: const EdgeInsets.only(left: 20, right: 8, top: 4, bottom: 4),
+                decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(30)),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(task.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16), overflow: TextOverflow.ellipsis),
+                          Text('Asignada a: $displayName', style: const TextStyle(fontSize: 13, color: Colors.black87), overflow: TextOverflow.ellipsis),
+                        ],
+                      ),
+                    ),
+                    if (isLeader || task.assignedToEmail == currentUserEmail)
+                      ElevatedButton(
+                        onPressed: () async {
+                          if (isLeader) {
+                            await Navigator.push(context, MaterialPageRoute(builder: (_) => TaskDetailsPage(activity: _currentActivity, task: task, assigneeName: displayName)));
+                          } else {
+                            await Navigator.push(context, MaterialPageRoute(builder: (_) => MemberTaskPage(activity: _currentActivity, task: task, assigneeName: displayName)));
+                          }
+                          await _refresh();
+                        },
+                        style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFE51D2A), foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)), minimumSize: const Size(60, 36), elevation: 0),
+                        child: const Text('Ver', style: TextStyle(fontWeight: FontWeight.bold)),
+                      ),
+                  ],
+                ),
+              );
+            },
+          ),
         ),
-      ]
+      ],
     );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: const PremiumAppBar(
-        titleText: 'Tus Actividades',
-        showProfileAvatar: true,
-      ),
+      appBar: const PremiumAppBar(titleText: 'Tus Actividades', showProfileAvatar: true),
       body: SafeArea(
-        child: StreamBuilder<Activity?>(
-          stream: ActivityService().getActivityStream(widget.activity.id),
-          initialData: _currentActivity,
-          builder: (context, snapshot) {
-            if (snapshot.hasData && snapshot.data != null) {
-               _currentActivity = snapshot.data!;
-            }
-
-            return Padding(
-              padding: const EdgeInsets.all(24.0),
-              child: Column(
-                children: [
-                   Container(
-                     padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-                     decoration: BoxDecoration(
-                       color: Colors.black.withValues(alpha: 0.12),
-                       borderRadius: BorderRadius.circular(30),
-                     ),
-                     child: Column(
-                       crossAxisAlignment: CrossAxisAlignment.center,
-                       children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Flexible(
-                                child: Text(
-                                  _currentActivity.name,
-                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Text('DL: ${_currentActivity.dueDate.day}/${_currentActivity.dueDate.month}/${_currentActivity.dueDate.year}', style: const TextStyle(fontSize: 14)),
-                            ]
-                          ),
-                          const SizedBox(height: 8),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                               const Text('Progreso: ', style: TextStyle(fontSize: 16)),
-                               Text('${_calculateProgress()}%', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          Text('Team Leader: $_leaderName', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                          if (_currentActivity.finalized) ...[
-                            const SizedBox(height: 10),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF2E7D32).withValues(alpha: 0.15),
-                                borderRadius: BorderRadius.circular(20),
-                              ),
-                              child: const Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(Icons.check_circle_rounded, color: Color(0xFF2E7D32), size: 16),
-                                  SizedBox(width: 6),
-                                  Text('Actividad Finalizada', style: TextStyle(color: Color(0xFF2E7D32), fontSize: 12, fontWeight: FontWeight.bold)),
-                                ],
-                              ),
-                            ),
-                          ] else if (_currentActivity.uid == IAuthFacade.instance.currentUserId) ...[
-                            const SizedBox(height: 12),
-                            SizedBox(
-                              width: double.infinity,
-                              child: ElevatedButton(
-                                onPressed: () => _finalizeActivity(context),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: const Color(0xFFE51D2A),
-                                  foregroundColor: Colors.white,
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                                  padding: const EdgeInsets.symmetric(vertical: 10),
-                                  elevation: 0,
-                                ),
-                                child: const Text('Finalizar actividad', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
-                              ),
-                            ),
+        child: Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(30)),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Flexible(child: Text(_currentActivity.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18), overflow: TextOverflow.ellipsis)),
+                        const SizedBox(width: 8),
+                        Text('DL: ${_currentActivity.dueDate.day}/${_currentActivity.dueDate.month}/${_currentActivity.dueDate.year}', style: const TextStyle(fontSize: 14)),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Text('Progreso: ', style: TextStyle(fontSize: 16)),
+                        Text('${_calculateProgress()}%', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Text('Team Leader: $_leaderName', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                    if (_currentActivity.finalized) ...[
+                      const SizedBox(height: 10),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                        decoration: BoxDecoration(color: const Color(0xFF2E7D32).withValues(alpha: 0.15), borderRadius: BorderRadius.circular(20)),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.check_circle_rounded, color: Color(0xFF2E7D32), size: 16),
+                            SizedBox(width: 6),
+                            Text('Actividad Finalizada', style: TextStyle(color: Color(0xFF2E7D32), fontSize: 12, fontWeight: FontWeight.bold)),
                           ],
-                       ]
-                     )
-                   ),
-                   const SizedBox(height: 24),
-                   Expanded(
-                     child: CardContainer(
-                       child: _showTasks ? _buildTasksList() : _buildMembersList(),
-                     )
-                   )
-                ]
-              )
-            );
-          }
-        )
-      )
+                        ),
+                      ),
+                    ] else if (_currentActivity.uid == IAuthFacade.instance.currentUserId) ...[
+                      const SizedBox(height: 12),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          onPressed: () => _finalizeActivity(context),
+                          style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFE51D2A), foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)), padding: const EdgeInsets.symmetric(vertical: 10), elevation: 0),
+                          child: const Text('Finalizar actividad', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(height: 24),
+              Expanded(child: CardContainer(child: _showTasks ? _buildTasksList() : _buildMembersList())),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

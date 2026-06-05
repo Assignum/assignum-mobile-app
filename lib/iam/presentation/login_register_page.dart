@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:assignum/iam/infrastructure/auth.dart';
+import 'package:assignum/core/infrastructure/api_client.dart';
 import 'package:assignum/iam/presentation/about_you_page.dart';
 import 'package:assignum/shared/presentation/widgets/ui.dart';
 import 'package:assignum/shared/presentation/widgets/premium_app_bar.dart';
@@ -18,11 +18,10 @@ class _LoginRegisterPageState extends State<LoginRegisterPage> {
   final _formKey = GlobalKey<FormState>();
   bool isLogin = true;
   String? errorMessage;
+  bool _loading = false;
 
   final _emailCtrl = TextEditingController();
   final _passCtrl  = TextEditingController();
-
-  // Campos solo para registro
   final _nameCtrl  = TextEditingController();
   DateTime? _birthDate;
 
@@ -53,7 +52,7 @@ class _LoginRegisterPageState extends State<LoginRegisterPage> {
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
-    setState(() => errorMessage = null);
+    setState(() { errorMessage = null; _loading = true; });
 
     try {
       if (isLogin) {
@@ -61,28 +60,30 @@ class _LoginRegisterPageState extends State<LoginRegisterPage> {
           email: _emailCtrl.text.trim(),
           password: _passCtrl.text,
         );
-        if (mounted) Navigator.pop(context); // vuelve al árbol -> Home
+        if (mounted) {
+          Navigator.of(context).pushNamedAndRemoveUntil('/', (_) => false);
+        }
       } else {
-        final cred = await Auth().createUserWithEmailAndPassword(
+        await Auth().createUserWithEmailAndPassword(
           email: _emailCtrl.text.trim(),
           password: _passCtrl.text,
         );
-
-        // En registro, pasamos a "Háblanos de ti"
         if (mounted) {
           Navigator.of(context).pushReplacement(
             MaterialPageRoute(
               builder: (_) => AboutYouPage(
-                fullName: _nameCtrl.text.trim(),
-                birthDate: _birthDate,
                 cameFromRegister: true,
+                initialName: _nameCtrl.text.trim(),
+                initialBirthDate: _birthDate,
               ),
             ),
           );
         }
       }
-    } on FirebaseAuthException catch (e) {
-      setState(() => errorMessage = e.message);
+    } on ApiException catch (e) {
+      if (mounted) setState(() { errorMessage = e.message; _loading = false; });
+    } catch (e) {
+      if (mounted) setState(() { errorMessage = 'Error inesperado. Intenta de nuevo.'; _loading = false; });
     }
   }
 
@@ -105,12 +106,9 @@ class _LoginRegisterPageState extends State<LoginRegisterPage> {
                       if (!isLogin) ...[
                         TextFormField(
                           controller: _nameCtrl,
-                          decoration: const InputDecoration(
-                            labelText: 'Nombre completo',
-                          ),
-                          validator: (v) =>
-                          (v == null || v.trim().length < 3)
-                              ? 'Ingresa tu nombre'
+                          decoration: const InputDecoration(labelText: 'Nombre completo'),
+                          validator: (v) => (!isLogin && (v == null || v.trim().length < 3))
+                              ? 'Ingresa tu nombre completo'
                               : null,
                         ),
                         const SizedBox(height: 12),
@@ -119,15 +117,17 @@ class _LoginRegisterPageState extends State<LoginRegisterPage> {
                           borderRadius: BorderRadius.circular(16),
                           child: InputDecorator(
                             decoration: const InputDecoration(
-                              labelText: 'Fecha de nacimiento',
+                              labelText: 'Fecha de nacimiento (opcional)',
                               border: OutlineInputBorder(),
                             ),
                             child: Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                Text(_birthDate == null
-                                    ? 'Elegir fecha'
-                                    : '${_birthDate!.day}/${_birthDate!.month}/${_birthDate!.year}'),
+                                Text(
+                                  _birthDate == null
+                                      ? 'Seleccionar fecha'
+                                      : '${_birthDate!.day}/${_birthDate!.month}/${_birthDate!.year}',
+                                ),
                                 const Icon(Icons.calendar_today_outlined),
                               ],
                             ),
@@ -138,54 +138,51 @@ class _LoginRegisterPageState extends State<LoginRegisterPage> {
                       TextFormField(
                         controller: _emailCtrl,
                         keyboardType: TextInputType.emailAddress,
-                        decoration: const InputDecoration(
-                          labelText: 'Correo electrónico',
-                        ),
-                        validator: (v) =>
-                        (v == null || !v.contains('@')) ? 'Correo inválido' : null,
+                        decoration: const InputDecoration(labelText: 'Correo electrónico'),
+                        validator: (v) => (v == null || !v.contains('@')) ? 'Correo inválido' : null,
                       ),
                       const SizedBox(height: 12),
                       TextFormField(
                         controller: _passCtrl,
                         obscureText: true,
-                        decoration: const InputDecoration(
-                          labelText: 'Contraseña',
-                        ),
-                        validator: (v) =>
-                        (v == null || v.length < 6)
-                            ? 'Mínimo 6 caracteres'
-                            : null,
+                        decoration: const InputDecoration(labelText: 'Contraseña'),
+                        validator: (v) => (v == null || v.length < 6) ? 'Mínimo 6 caracteres' : null,
                       ),
                       if (errorMessage != null) ...[
                         const SizedBox(height: 12),
-                        Text(
-                          errorMessage!,
-                          style: const TextStyle(color: Colors.red),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: Colors.red.withValues(alpha: 0.08),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.error_outline, color: Colors.red, size: 16),
+                              const SizedBox(width: 8),
+                              Expanded(child: Text(errorMessage!, style: const TextStyle(color: Colors.red, fontSize: 13))),
+                            ],
+                          ),
                         ),
                       ],
                       const SizedBox(height: 16),
                       PrimaryButton(
-                        text: isLogin ? 'Iniciar sesión' : 'Siguiente',
-                        onPressed: _submit,
+                        text: _loading
+                            ? (isLogin ? 'Iniciando sesión...' : 'Registrando...')
+                            : (isLogin ? 'Iniciar sesión' : 'Continuar'),
+                        onPressed: _loading ? null : _submit,
                       ),
                       const SizedBox(height: 8),
                       TextButton(
-                        onPressed: () => setState(() => isLogin = !isLogin),
-                        child: Text(isLogin
-                            ? '¿No tienes cuenta? Regístrate'
-                            : '¿Ya tienes cuenta? Inicia sesión'),
+                        onPressed: _loading ? null : () => setState(() { isLogin = !isLogin; errorMessage = null; }),
+                        child: Text(isLogin ? '¿No tienes cuenta? Regístrate' : '¿Ya tienes cuenta? Inicia sesión'),
                       ),
                       if (isLogin)
                         TextButton(
                           onPressed: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => ForgotPasswordPage(
-                                  initialEmail: _emailCtrl.text.trim(),
-                                ),
-                              ),
-                            );
+                            Navigator.push(context, MaterialPageRoute(
+                              builder: (_) => ForgotPasswordPage(initialEmail: _emailCtrl.text.trim()),
+                            ));
                           },
                           child: const Text('¿Olvidaste tu contraseña?'),
                         ),

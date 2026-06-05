@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:assignum/iam/infrastructure/auth.dart';
+import 'package:assignum/core/infrastructure/auth_session.dart';
 import 'package:assignum/iam/presentation/welcome_page.dart';
 import 'package:assignum/core/presentation/home_page.dart';
 import 'package:assignum/iam/infrastructure/user_service.dart';
@@ -11,21 +10,16 @@ class WidgetTree extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<User?>(
-      stream: Auth().authStateChanges,
+    return StreamBuilder<bool>(
+      stream: AuthSession().authStateChanges,
+      initialData: AuthSession().isLoggedIn,
       builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Scaffold(
-            body: Center(child: CircularProgressIndicator()),
-          );
-        }
+        final loggedIn = snapshot.data ?? false;
 
-        final user = snapshot.data;
-        if (user == null) return const WelcomePage();
+        if (!loggedIn) return const WelcomePage();
 
-        // Verifica si ya completó su perfil
         return FutureBuilder<bool>(
-          future: UserService().profileExists(user.uid),
+          future: UserService().profileExists(),
           builder: (context, snap) {
             if (!snap.hasData) {
               return const Scaffold(
@@ -33,14 +27,9 @@ class WidgetTree extends StatelessWidget {
               );
             }
             if (snap.data == true) {
-              return HomePage();
+              return const HomePage();
             } else {
-              // Si no existe perfil, forzamos completar "Háblanos de ti".
-              return const AboutYouPage(
-                fullName: '',
-                birthDate: null,
-                cameFromRegister: false,
-              );
+              return const AboutYouPage(cameFromRegister: false);
             }
           },
         );

@@ -65,7 +65,7 @@ class _ActivitiesListPageState extends State<ActivitiesListPage> {
                      margin: const EdgeInsets.only(bottom: 16),
                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
                      decoration: BoxDecoration(
-                       color: Colors.black.withOpacity(0.08),
+                       color: Colors.black.withValues(alpha: 0.08),
                        borderRadius: BorderRadius.circular(24),
                      ),
                      child: Row(

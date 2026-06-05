@@ -1,16 +1,13 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-
 class UserProfile {
   final String uid;
   final String fullName;
   final DateTime? birthDate;
 
-  // Atributos para ML:
-  final String disponibilidad;     // Mañana/Tarde/Noche/Fin de semana
-  final String cargaAcademica;     // Ligera/Media/Alta
-  final int trabajoEnEquipo;       // 1..5
-  final int comunicacion;          // 1..5
-  final int horasEstudio;          // 0..60
+  final String disponibilidad;
+  final String cargaAcademica;
+  final int trabajoEnEquipo;
+  final int comunicacion;
+  final int horasEstudio;
 
   UserProfile({
     required this.uid,
@@ -23,24 +20,21 @@ class UserProfile {
     required this.horasEstudio,
   });
 
-  Map<String, dynamic> toMap() => {
-    'uid': uid,
+  Map<String, dynamic> toApiMap() => {
     'fullName': fullName,
-    'birthDate':
-    birthDate != null ? Timestamp.fromDate(birthDate!) : null,
+    if (birthDate != null) 'birthDate': birthDate!.toIso8601String().split('T')[0],
     'disponibilidad': disponibilidad,
     'cargaAcademica': cargaAcademica,
     'trabajoEnEquipo': trabajoEnEquipo,
     'comunicacion': comunicacion,
     'horasEstudio': horasEstudio,
-    'createdAt': FieldValue.serverTimestamp(),
   };
 
   static UserProfile fromMap(Map<String, dynamic> map) => UserProfile(
-    uid: map['uid'] as String,
+    uid: map['uid'] as String? ?? '',
     fullName: map['fullName'] as String? ?? '',
-    birthDate: map['birthDate'] is Timestamp
-        ? (map['birthDate'] as Timestamp).toDate()
+    birthDate: map['birthDate'] != null
+        ? DateTime.tryParse(map['birthDate'].toString())
         : null,
     disponibilidad: map['disponibilidad'] as String? ?? 'Mañana',
     cargaAcademica: map['cargaAcademica'] as String? ?? 'Media',

@@ -133,7 +133,7 @@ class _ChatboxPageState extends State<ChatboxPage> {
                 decoration: BoxDecoration(
                   color: Colors.grey[200],
                   borderRadius: BorderRadius.circular(28),
-                  border: Border.all(color: Colors.black.withOpacity(0.04), width: 1),
+                  border: Border.all(color: Colors.black.withValues(alpha: 0.04), width: 1),
                 ),
                 child: Column(
                   children: [
@@ -202,7 +202,7 @@ class _ChatboxPageState extends State<ChatboxPage> {
                         borderRadius: BorderRadius.circular(28),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.03),
+                            color: Colors.black.withValues(alpha: 0.03),
                             blurRadius: 4,
                             offset: const Offset(0, 1),
                           ),

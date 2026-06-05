@@ -1,4 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:assignum/activities/domain/activity_task.dart';
 
 class Activity {
@@ -25,21 +24,6 @@ class Activity {
     this.memberNames = const {},
     this.finalized = false,
   });
-
-  Map<String, dynamic> toMap() {
-    return {
-      'id': id,
-      'uid': uid,
-      'name': name,
-      'dueDate': dueDate.toIso8601String(),
-      'documentLink': documentLink,
-      'tasks': tasks.map((e) => e.toMap()).toList(),
-      'invitedEmails': invitedEmails,
-      'acceptedEmails': acceptedEmails,
-      'memberNames': memberNames,
-      'finalized': finalized,
-    };
-  }
 
   factory Activity.fromMap(Map<String, dynamic> map) {
     return Activity(
