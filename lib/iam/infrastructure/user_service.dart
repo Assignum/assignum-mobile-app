@@ -36,6 +36,16 @@ class UserService {
     await ApiClient.put('/api/users/me/profile', p.toApiMap());
   }
 
+  Future<UserProfile?> getProfileByUid(String uid) async {
+    try {
+      final data = await ApiClient.get('/api/users/$uid') as Map<String, dynamic>;
+      return UserProfile.fromMap(data);
+    } on ApiException catch (e) {
+      if (e.statusCode == 404) return null;
+      rethrow;
+    }
+  }
+
   // Compatibilidad: intenta POST, si ya existe usa PUT
   Future<void> createOrUpdateProfile(UserProfile p) async {
     try {

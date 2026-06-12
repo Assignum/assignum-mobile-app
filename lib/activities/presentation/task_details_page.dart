@@ -32,7 +32,15 @@ class _TaskDetailsPageState extends State<TaskDetailsPage> {
   }
 
   Future<void> _verifyTask(BuildContext context) async {
-    await ActivityService().verifyTask(widget.activity.id, _currentTask.id);
+    try {
+      await ActivityService().verifyTask(widget.activity.id, _currentTask.id);
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString()), backgroundColor: Colors.red),
+      );
+      return;
+    }
     setState(() => _currentTask = _currentTask.copyWith(status: 'Verificado'));
 
     if (!context.mounted) return;
@@ -127,12 +135,35 @@ class _TaskDetailsPageState extends State<TaskDetailsPage> {
                         const SizedBox(height: 8),
                         Text(_currentTask.comments.isEmpty ? 'Sin comentarios' : _currentTask.comments, style: const TextStyle(fontSize: 14)),
                         const SizedBox(height: 32),
-                        if (_currentTask.status != 'Verificado')
+                        if (_currentTask.status == 'Entregado')
                           Center(
                             child: ElevatedButton(
                               onPressed: () => _verifyTask(context),
                               style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFE51D2A), foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)), padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12)),
-                              child: const Text('Verificado', style: TextStyle(fontSize: 16)),
+                              child: const Text('Marcar como Verificado', style: TextStyle(fontSize: 16)),
+                            ),
+                          )
+                        else if (_currentTask.status == 'Verificado')
+                          Center(
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
+                              decoration: BoxDecoration(color: Colors.green.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(24)),
+                              child: const Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.check_circle_outline, color: Colors.green, size: 20),
+                                  SizedBox(width: 8),
+                                  Text('Tarea verificada', style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
+                                ],
+                              ),
+                            ),
+                          )
+                        else
+                          Center(
+                            child: Text(
+                              'El miembro debe marcarla como "Entregado" antes de poder verificarla',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(color: Colors.black45, fontSize: 13),
                             ),
                           ),
                       ],

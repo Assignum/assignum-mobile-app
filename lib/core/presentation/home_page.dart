@@ -23,6 +23,8 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   final UserService _userService = UserService();
   final ActivityService _activityService = ActivityService();
 
+  late Future<Map<String, int>> _statsFuture;
+
   late final AnimationController _animController;
   late final List<Animation<double>> _fadeAnims;
   late final List<Animation<Offset>> _slideAnims;
@@ -52,6 +54,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     });
 
     _animController.forward();
+    _statsFuture = _activityService.getDashboardStats();
   }
 
   @override
@@ -79,7 +82,14 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   }
 
   void _navigateTo(Widget page) {
-    Navigator.push(context, MaterialPageRoute(builder: (_) => page));
+    Navigator.push(context, MaterialPageRoute(builder: (_) => page))
+        .then((_) {
+          if (mounted) {
+            setState(() {
+              _statsFuture = _activityService.getDashboardStats();
+            });
+          }
+        });
   }
 
   @override
@@ -200,7 +210,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
 
   Widget _buildStatsRow() {
     return FutureBuilder<Map<String, int>>(
-      future: _activityService.getDashboardStats(),
+      future: _statsFuture,
       builder: (context, snapshot) {
         final stats = snapshot.data;
         final isLoading = !snapshot.hasData;

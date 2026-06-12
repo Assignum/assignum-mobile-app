@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:assignum/activities/domain/activity.dart';
 import 'package:assignum/core/infrastructure/api_client.dart';
+import 'package:assignum/core/infrastructure/socket_service.dart';
 import 'package:assignum/shared/presentation/widgets/ui.dart';
 import 'package:assignum/activities/presentation/task_details_page.dart';
 import 'package:assignum/activities/presentation/member_task_page.dart';
@@ -22,6 +24,7 @@ class _ActivityDetailsPageState extends State<ActivityDetailsPage> {
   late bool _showTasks;
   String _leaderName = 'Cargando...';
   late Activity _currentActivity;
+  Timer? _pollTimer;
 
   @override
   void initState() {
@@ -29,20 +32,49 @@ class _ActivityDetailsPageState extends State<ActivityDetailsPage> {
     _currentActivity = widget.activity;
     _showTasks = !widget.isCreationFlow;
     _fetchLeaderName();
+    _subscribeSocket();
+    // Poll every 8s as fallback when WS misses events
+    _pollTimer = Timer.periodic(const Duration(seconds: 8), (_) => _refresh());
   }
 
-  Future<void> _fetchLeaderName() async {
+  String get _socketKey => 'details_${_currentActivity.id}';
+
+  void _subscribeSocket() {
+    final socket = SocketService();
+    socket.joinActivity(_currentActivity.id);
+    socket.addActivityListener(_socketKey, (id) {
+      if (id == _currentActivity.id) _refresh();
+    });
+    socket.addTaskListener(_socketKey, (id) {
+      if (id == _currentActivity.id) _refresh();
+    });
+  }
+
+  @override
+  void dispose() {
+    _pollTimer?.cancel();
+    SocketService().leaveActivity(_currentActivity.id);
+    SocketService().removeListener(_socketKey);
+    super.dispose();
+  }
+
+  void _fetchLeaderName() {
     if (_currentActivity.uid == IAuthFacade.instance.currentUserId) {
-      if (mounted) setState(() => _leaderName = 'Tú');
+      _leaderName = 'Tú';
       return;
     }
-    final name = await IAuthFacade.instance.getUserName(_currentActivity.uid);
-    if (mounted) setState(() => _leaderName = name ?? 'Líder');
+    final name = _currentActivity.leaderName;
+    _leaderName = name.isNotEmpty ? name : 'Sin nombre';
   }
 
   Future<void> _refresh() async {
     final updated = await ActivityService().getActivity(_currentActivity.id);
-    if (mounted && updated != null) setState(() => _currentActivity = updated);
+    if (mounted && updated != null) {
+      setState(() {
+        _currentActivity = updated;
+        _fetchLeaderName();
+      });
+    }
   }
 
   Future<void> _finalizeActivity(BuildContext context) async {
@@ -188,14 +220,34 @@ class _ActivityDetailsPageState extends State<ActivityDetailsPage> {
           const SizedBox(height: 16),
           SizedBox(
             width: double.infinity,
-            child: ElevatedButton(
-              onPressed: _currentActivity.tasks.isEmpty ? null : () async {
-                await ActivityService().assignTasks(_currentActivity.id);
-                await _refresh();
-                _showSuccessDialog();
-              },
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFE51D2A), foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)), padding: const EdgeInsets.symmetric(vertical: 14), elevation: 0),
-              child: const Text('Dividir Tareas', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            child: Tooltip(
+              message: _currentActivity.tasks.isEmpty ? 'Agrega tareas primero' : '',
+              child: ElevatedButton(
+                onPressed: _currentActivity.tasks.isEmpty
+                    ? null
+                    : () async {
+                        try {
+                          await ActivityService().assignTasks(_currentActivity.id);
+                          await _refresh();
+                          _showSuccessDialog();
+                        } on ApiException catch (e) {
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text(e.message), backgroundColor: Colors.red),
+                            );
+                          }
+                        }
+                      },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFE51D2A),
+                  foregroundColor: Colors.white,
+                  disabledBackgroundColor: Colors.grey.shade300,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  elevation: 0,
+                ),
+                child: const Text('Dividir Tareas', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              ),
             ),
           ),
         ],
@@ -230,10 +282,12 @@ class _ActivityDetailsPageState extends State<ActivityDetailsPage> {
               String displayName = task.assignedToEmail;
               if (task.assignedToEmail == currentUserEmail) {
                 displayName = isLeader ? 'Tú (Líder)' : 'Tú';
-              } else if (!_currentActivity.invitedEmails.contains(task.assignedToEmail) && !_currentActivity.acceptedEmails.contains(task.assignedToEmail)) {
-                displayName = '$_leaderName (Líder)';
+              } else if (_currentActivity.acceptedEmails.contains(task.assignedToEmail)) {
+                displayName = _currentActivity.memberNames[task.assignedToEmail] ?? task.assignedToEmail;
+              } else if (_currentActivity.invitedEmails.contains(task.assignedToEmail)) {
+                displayName = '${task.assignedToEmail} (Pendiente de aceptar)';
               } else {
-                displayName = _currentActivity.memberNames[task.assignedToEmail] ?? _currentActivity.memberNames[task.assignedToEmail.replaceAll('.', '_')] ?? task.assignedToEmail;
+                displayName = '$_leaderName (Líder)';
               }
 
               return Container(

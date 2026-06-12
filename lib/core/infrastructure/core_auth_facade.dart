@@ -14,10 +14,7 @@ class CoreAuthFacade implements IAuthFacade {
 
   @override
   Future<String?> getUserName(String uid) async {
-    if (uid == AuthSession().uid) {
-      final profile = await UserService().getProfile();
-      return profile?.fullName;
-    }
-    return null;
+    final profile = await UserService().getProfileByUid(uid);
+    return profile?.fullName;
   }
 }

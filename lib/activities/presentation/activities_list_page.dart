@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:assignum/activities/domain/activity.dart';
 import 'package:assignum/activities/infrastructure/activity_service.dart';
 import 'package:assignum/activities/presentation/activity_details_page.dart';
+import 'package:assignum/core/infrastructure/socket_service.dart';
 import 'package:assignum/shared/presentation/widgets/premium_app_bar.dart';
 
 class ActivitiesListPage extends StatefulWidget {
@@ -15,20 +17,35 @@ class _ActivitiesListPageState extends State<ActivitiesListPage> {
   final _service = ActivityService();
   List<Activity> _activities = [];
   bool _loading = true;
+  String? _errorMessage;
+  Timer? _pollTimer;
 
   @override
   void initState() {
     super.initState();
-    _load();
+    _load(showSpinner: true);
+    SocketService().addActivityListener('activities_list', (_) => _load());
+    // Poll every 12s as fallback
+    _pollTimer = Timer.periodic(const Duration(seconds: 12), (_) => _load());
   }
 
-  Future<void> _load() async {
-    final acts = await _service.getActivities();
-    if (mounted) {
-      setState(() {
-        _activities = acts;
-        _loading = false;
-      });
+  @override
+  void dispose() {
+    _pollTimer?.cancel();
+    SocketService().removeListener('activities_list');
+    super.dispose();
+  }
+
+  // showSpinner=true solo en la carga inicial; las recargas silenciosas no bloquean la UI
+  Future<void> _load({bool showSpinner = false}) async {
+    if (showSpinner && mounted) setState(() { _loading = true; _errorMessage = null; });
+    try {
+      final acts = await _service.getActivities();
+      if (mounted) setState(() { _activities = acts; _loading = false; _errorMessage = null; });
+    } catch (_) {
+      if (mounted && _activities.isEmpty) {
+        setState(() { _loading = false; _errorMessage = 'No se pudo conectar. Desliza hacia abajo para reintentar.'; });
+      }
     }
   }
 
@@ -39,7 +56,6 @@ class _ActivitiesListPageState extends State<ActivitiesListPage> {
   }
 
   Future<void> _delete(String id) async {
-    setState(() => _loading = true);
     await _service.deleteActivity(id);
     await _load();
   }
@@ -52,14 +68,32 @@ class _ActivitiesListPageState extends State<ActivitiesListPage> {
         showProfileAvatar: true,
       ),
       body: SafeArea(
-        child: _loading 
+        child: _loading
           ? const Center(child: CircularProgressIndicator())
-          : _activities.isEmpty 
-             ? const Center(child: Text('No hay actividades aún', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)))
-             : ListView.builder(
-                 padding: const EdgeInsets.all(24),
-                 itemCount: _activities.length,
-                 itemBuilder: (ctx, i) {
+          : RefreshIndicator(
+              onRefresh: _load,
+              child: _errorMessage != null
+               ? SingleChildScrollView(
+                   physics: const AlwaysScrollableScrollPhysics(),
+                   child: SizedBox(height: 300, child: Center(child: Column(
+                     mainAxisAlignment: MainAxisAlignment.center,
+                     children: [
+                       const Icon(Icons.wifi_off_rounded, size: 48, color: Colors.black26),
+                       const SizedBox(height: 12),
+                       Text(_errorMessage!, textAlign: TextAlign.center, style: const TextStyle(fontSize: 14, color: Colors.black54)),
+                     ],
+                   ))),
+                 )
+               : _activities.isEmpty
+               ? const SingleChildScrollView(
+                   physics: AlwaysScrollableScrollPhysics(),
+                   child: SizedBox(height: 300, child: Center(child: Text('No hay actividades aún', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)))),
+                 )
+               : ListView.builder(
+                   physics: const AlwaysScrollableScrollPhysics(),
+                   padding: const EdgeInsets.all(24),
+                   itemCount: _activities.length,
+                   itemBuilder: (ctx, i) {
                    final act = _activities[i];
                    return Container(
                      margin: const EdgeInsets.only(bottom: 16),
@@ -114,7 +148,8 @@ class _ActivitiesListPageState extends State<ActivitiesListPage> {
                      )
                    );
                  }
-               )
+               ),
+            ),
       )
     );
   }

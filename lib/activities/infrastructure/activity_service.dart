@@ -10,6 +10,20 @@ class ActivityService {
     return list.map((e) => Activity.fromMap(e as Map<String, dynamic>)).toList();
   }
 
+  Future<Map<String, String>> getActivityMembers(String activityId) async {
+    try {
+      final data = await ApiClient.get('/api/activities/$activityId/members') as Map<String, dynamic>;
+      final members = data['members'] as List<dynamic>? ?? [];
+      return {
+        for (final m in members)
+          if (m['uid'] != null && m['name'] != null)
+            m['uid'] as String: m['name'] as String,
+      };
+    } catch (_) {
+      return {};
+    }
+  }
+
   Future<Activity?> getActivity(String id) async {
     try {
       final data = await ApiClient.get('/api/activities/$id') as Map<String, dynamic>;

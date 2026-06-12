@@ -3,6 +3,7 @@ import 'package:assignum/activities/domain/activity_task.dart';
 class Activity {
   final String id;
   final String uid;
+  final String leaderName;
   final String name;
   final DateTime dueDate;
   final String documentLink;
@@ -15,6 +16,7 @@ class Activity {
   Activity({
     required this.id,
     required this.uid,
+    this.leaderName = '',
     required this.name,
     required this.dueDate,
     required this.documentLink,
@@ -29,6 +31,7 @@ class Activity {
     return Activity(
       id: map['id'] ?? '',
       uid: map['uid'] ?? '',
+      leaderName: map['leaderName'] as String? ?? '',
       name: map['name'] ?? '',
       dueDate: DateTime.tryParse(map['dueDate'] ?? '') ?? DateTime.now(),
       documentLink: map['documentLink'] ?? '',
