@@ -2,7 +2,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:assignum/activities/domain/activity.dart';
 import 'package:assignum/core/infrastructure/api_client.dart';
-import 'package:assignum/core/infrastructure/socket_service.dart';
 import 'package:assignum/shared/presentation/widgets/ui.dart';
 import 'package:assignum/activities/presentation/task_details_page.dart';
 import 'package:assignum/activities/presentation/member_task_page.dart';
@@ -24,7 +23,7 @@ class _ActivityDetailsPageState extends State<ActivityDetailsPage> {
   late bool _showTasks;
   String _leaderName = 'Cargando...';
   late Activity _currentActivity;
-  Timer? _pollTimer;
+  StreamSubscription<Activity?>? _activitySub;
 
   @override
   void initState() {
@@ -32,29 +31,21 @@ class _ActivityDetailsPageState extends State<ActivityDetailsPage> {
     _currentActivity = widget.activity;
     _showTasks = !widget.isCreationFlow;
     _fetchLeaderName();
-    _subscribeSocket();
-    // Poll every 8s as fallback when WS misses events
-    _pollTimer = Timer.periodic(const Duration(seconds: 8), (_) => _refresh());
-  }
-
-  String get _socketKey => 'details_${_currentActivity.id}';
-
-  void _subscribeSocket() {
-    final socket = SocketService();
-    socket.joinActivity(_currentActivity.id);
-    socket.addActivityListener(_socketKey, (id) {
-      if (id == _currentActivity.id) _refresh();
-    });
-    socket.addTaskListener(_socketKey, (id) {
-      if (id == _currentActivity.id) _refresh();
+    _activitySub = ActivityService()
+        .getActivityStreamById(widget.activity.id)
+        .listen((updated) {
+      if (updated != null && mounted) {
+        setState(() {
+          _currentActivity = updated;
+          _fetchLeaderName();
+        });
+      }
     });
   }
 
   @override
   void dispose() {
-    _pollTimer?.cancel();
-    SocketService().leaveActivity(_currentActivity.id);
-    SocketService().removeListener(_socketKey);
+    _activitySub?.cancel();
     super.dispose();
   }
 

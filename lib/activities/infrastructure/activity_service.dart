@@ -1,8 +1,40 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:assignum/core/infrastructure/api_client.dart';
+import 'package:assignum/core/infrastructure/auth_session.dart';
 import 'package:assignum/activities/domain/activity.dart';
 import 'package:assignum/activities/domain/activity_task.dart';
 
 class ActivityService {
+  static Activity _fromDoc(DocumentSnapshot doc) {
+    final data = Map<String, dynamic>.from(doc.data() as Map);
+    data['id'] = doc.id;
+    return Activity.fromMap(data);
+  }
+
+  // ── Firestore real-time streams ──────────────────────────────────────────────
+
+  Stream<List<Activity>> getActivitiesStream() {
+    final uid   = AuthSession().uid   ?? '';
+    final email = AuthSession().email ?? '';
+    return FirebaseFirestore.instance
+        .collection('activities')
+        .where(Filter.or(
+          Filter('uid', isEqualTo: uid),
+          Filter('acceptedEmails', arrayContains: email),
+          Filter('invitedEmails',  arrayContains: email),
+        ))
+        .snapshots()
+        .map((snap) => snap.docs.map(_fromDoc).toList());
+  }
+
+  Stream<Activity?> getActivityStreamById(String activityId) {
+    return FirebaseFirestore.instance
+        .collection('activities')
+        .doc(activityId)
+        .snapshots()
+        .map((doc) => doc.exists ? _fromDoc(doc) : null);
+  }
+
   // ── Activities ──────────────────────────────────────────────────────────────
 
   Future<List<Activity>> getActivities() async {

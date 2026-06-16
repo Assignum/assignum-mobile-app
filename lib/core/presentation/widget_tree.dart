@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:assignum/core/infrastructure/auth_session.dart';
 import 'package:assignum/core/infrastructure/api_client.dart';
 import 'package:assignum/iam/infrastructure/auth.dart';
@@ -14,6 +15,11 @@ class WidgetTree extends StatelessWidget {
   const WidgetTree({super.key});
 
   Future<_ProfileStatus> _checkProfile() async {
+    // Firebase Auth session missing → force re-login so Firestore works
+    if (FirebaseAuth.instance.currentUser == null) {
+      await Auth().signOut();
+      return _ProfileStatus.authError;
+    }
     try {
       final exists = await UserService()
           .profileExists()
