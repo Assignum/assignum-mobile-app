@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:assignum/core/infrastructure/auth_session.dart';
 import 'package:assignum/iam/infrastructure/user_service.dart';
+import 'package:assignum/iam/infrastructure/auth.dart';
 import 'package:assignum/iam/domain/user_profile.dart';
-import 'package:assignum/shared/presentation/widgets/premium_app_bar.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -13,8 +14,21 @@ class ProfilePage extends StatefulWidget {
 
 class _ProfilePageState extends State<ProfilePage> {
   final _userService = UserService();
-  UserProfile? _profile;
+  final _nameCtrl = TextEditingController();
+
   bool _loading = true;
+  bool _saving = false;
+  UserProfile? _profile;
+
+  // Sliders de disponibilidad y carga (mapeados a posiciones)
+  double _disponibilidad = 2; // 1=Mañana, 2=Tarde, 3=Noche
+  double _cargaAcademica = 2; // 1=Ligera, 2=Media, 3=Alta
+  double _trabajoEnEquipo = 3;
+  double _comunicacion = 3;
+  double _horasEstudio = 20;
+
+  static const _disponibilidadLabels = ['Mañana', 'Tarde', 'Noche'];
+  static const _cargaLabels = ['Ligera', 'Media', 'Alta'];
 
   @override
   void initState() {
@@ -22,81 +36,308 @@ class _ProfilePageState extends State<ProfilePage> {
     _loadProfile();
   }
 
-  Future<void> _loadProfile() async {
-    final p = await _userService.getProfile();
-    if (mounted) setState(() { _profile = p; _loading = false; });
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    super.dispose();
   }
 
-  Future<void> _editField(String title, String initialValue, Function(String) onSave, {bool isNumeric = false, List<String>? options}) async {
-    String value = initialValue;
-    final formKey = GlobalKey<FormState>();
+  Future<void> _loadProfile() async {
+    final p = await _userService.getProfile();
+    if (!mounted) return;
+    setState(() {
+      _profile = p;
+      _loading = false;
+      if (p != null) {
+        _nameCtrl.text = p.fullName;
+        _disponibilidad = _dispToSlider(p.disponibilidad);
+        _cargaAcademica = _cargaToSlider(p.cargaAcademica);
+        _trabajoEnEquipo = p.trabajoEnEquipo.toDouble().clamp(1, 5);
+        _comunicacion = p.comunicacion.toDouble().clamp(1, 5);
+        _horasEstudio = p.horasEstudio.toDouble().clamp(1, 50);
+      }
+    });
+  }
 
-    await showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('Editar $title'),
-        content: Form(
-          key: formKey,
-          child: options != null
-              ? DropdownButtonFormField<String>(
-                  initialValue: value,
-                  items: options.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
-                  onChanged: (v) => value = v ?? value,
-                )
-              : TextFormField(
-                  initialValue: initialValue,
-                  keyboardType: isNumeric ? TextInputType.number : TextInputType.text,
-                  decoration: InputDecoration(labelText: title),
-                  onChanged: (v) => value = v,
-                  validator: (v) => v == null || v.isEmpty ? 'El campo es requerido' : null,
-                ),
+  double _dispToSlider(String v) {
+    if (v == 'Mañana') return 1;
+    if (v == 'Tarde') return 2;
+    return 3; // Noche
+  }
+
+  double _cargaToSlider(String v) {
+    if (v == 'Ligera') return 1;
+    if (v == 'Media') return 2;
+    return 3; // Alta
+  }
+
+  String get _disponibilidadStr =>
+      _disponibilidadLabels[(_disponibilidad - 1).round().clamp(0, 2)];
+
+  String get _cargaStr =>
+      _cargaLabels[(_cargaAcademica - 1).round().clamp(0, 2)];
+
+  Future<void> _saveChanges() async {
+    if (_saving || _profile == null) return;
+    if (_nameCtrl.text.trim().length < 3) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('El nombre debe tener al menos 3 caracteres')),
+      );
+      return;
+    }
+    setState(() => _saving = true);
+
+    final updated = UserProfile(
+      uid: _profile!.uid,
+      fullName: _nameCtrl.text.trim(),
+      birthDate: _profile!.birthDate,
+      disponibilidad: _disponibilidadStr,
+      cargaAcademica: _cargaStr,
+      trabajoEnEquipo: _trabajoEnEquipo.round(),
+      comunicacion: _comunicacion.round(),
+      horasEstudio: _horasEstudio.round(),
+    );
+
+    await _userService.createOrUpdateProfile(updated);
+    if (!mounted) return;
+    setState(() { _saving = false; _profile = updated; });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'Perfil actualizado',
+          style: GoogleFonts.hankenGrotesk(fontSize: 14),
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
-          ElevatedButton(
-            onPressed: () {
-              if (formKey.currentState!.validate()) { Navigator.pop(ctx); onSave(value); }
-            },
-            child: const Text('Guardar'),
-          ),
-        ],
+        backgroundColor: const Color(0xFF6C8A57),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
     );
   }
 
-  Future<void> _updateProfileAndReload(UserProfile newProfile) async {
-    setState(() => _loading = true);
-    await _userService.createOrUpdateProfile(newProfile);
-    await _loadProfile();
+  Future<void> _logout() async {
+    await Auth().signOut();
+    if (!mounted) return;
+    Navigator.of(context).pushNamedAndRemoveUntil('/', (_) => false);
   }
 
-  Widget _buildFieldRow(String label, String value, VoidCallback onEdit) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 16.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+  String _initials(String name) {
+    final parts = name.trim().split(' ').where((s) => s.isNotEmpty).toList();
+    if (parts.isEmpty) return 'U';
+    if (parts.length == 1) return parts[0][0].toUpperCase();
+    return (parts[0][0] + parts[1][0]).toUpperCase();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loading) {
+      return const Scaffold(
+        backgroundColor: Color(0xFFF4F2EA),
+        body: Center(child: CircularProgressIndicator(color: Color(0xFFDC2F26))),
+      );
+    }
+
+    final name = _profile?.fullName ?? AuthSession().email ?? 'Usuario';
+    final email = AuthSession().email ?? '';
+    final initials = _initials(name);
+
+    return Scaffold(
+      backgroundColor: const Color(0xFFF4F2EA),
+      body: Column(
         children: [
-          Text(label, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-          const SizedBox(height: 4),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(20)),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Expanded(child: Text(value, style: const TextStyle(fontSize: 16), overflow: TextOverflow.ellipsis)),
-                ElevatedButton(
-                  onPressed: onEdit,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFE51D2A),
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                    minimumSize: const Size(60, 32),
-                    elevation: 0,
+          // ── AppBar carbon ─────────────────────────────────────────────
+          _ProfileAppBar(
+            initials: initials,
+            onBack: () => Navigator.pop(context),
+            onLogout: _logout,
+          ),
+
+          // ── Scrollable content ────────────────────────────────────────
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Avatar + nombre
+                  Row(
+                    children: [
+                      Container(
+                        width: 64,
+                        height: 64,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFDC2F26),
+                          borderRadius: BorderRadius.circular(18),
+                        ),
+                        child: Center(
+                          child: Text(
+                            initials,
+                            style: GoogleFonts.hankenGrotesk(
+                              fontSize: 22,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Text(
+                          name,
+                          style: GoogleFonts.hankenGrotesk(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w700,
+                            color: const Color(0xFF21201B),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                  child: const Text('Editar', style: TextStyle(fontSize: 12)),
+
+                  const SizedBox(height: 28),
+
+                  // Nombre (editable)
+                  _fieldLabel('Nombre'),
+                  const SizedBox(height: 8),
+                  _textField(
+                    controller: _nameCtrl,
+                    icon: Icons.person_outline_rounded,
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  // Correo (solo lectura)
+                  _fieldLabel('Correo'),
+                  const SizedBox(height: 8),
+                  _readonlyField(
+                    value: email,
+                    icon: Icons.mail_outline_rounded,
+                  ),
+
+                  const SizedBox(height: 28),
+
+                  // Sección preferencias
+                  Text(
+                    'PREFERENCIAS DE TRABAJO',
+                    style: GoogleFonts.hankenGrotesk(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 1.6,
+                      color: const Color(0xFF9A978C),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+
+                  // Card de sliders
+                  Container(
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFBFAF4),
+                      borderRadius: BorderRadius.circular(22),
+                      border:
+                          Border.all(color: const Color(0xFFE7E2D5), width: 1),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF3C321E).withValues(alpha: 0.06),
+                          blurRadius: 14,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      children: [
+                        _ProfileSliderRow(
+                          icon: Icons.schedule_outlined,
+                          label: 'Disponibilidad',
+                          displayValue: _disponibilidadStr,
+                          bottomLabels: const ['Mañana', 'Tarde', 'Noche'],
+                          child: _slider(
+                            value: _disponibilidad,
+                            min: 1, max: 3, divisions: 2,
+                            onChanged: (v) => setState(() => _disponibilidad = v),
+                          ),
+                        ),
+                        _divider(),
+                        _ProfileSliderRow(
+                          icon: Icons.school_outlined,
+                          label: 'Carga académica',
+                          displayValue: _cargaStr,
+                          bottomLabels: const ['Ligera', 'Media', 'Alta'],
+                          child: _slider(
+                            value: _cargaAcademica,
+                            min: 1, max: 3, divisions: 2,
+                            onChanged: (v) => setState(() => _cargaAcademica = v),
+                          ),
+                        ),
+                        _divider(),
+                        _ProfileSliderRow(
+                          icon: Icons.groups_2_outlined,
+                          label: 'Trabajo en equipo',
+                          displayValue: '${_trabajoEnEquipo.round()}/5',
+                          bottomLabels: const ['Bajo', 'Alto'],
+                          child: _slider(
+                            value: _trabajoEnEquipo,
+                            min: 1, max: 5, divisions: 4,
+                            onChanged: (v) => setState(() => _trabajoEnEquipo = v),
+                          ),
+                        ),
+                        _divider(),
+                        _ProfileSliderRow(
+                          icon: Icons.chat_bubble_outline_rounded,
+                          label: 'Comunicación',
+                          displayValue: '${_comunicacion.round()}/5',
+                          bottomLabels: const ['Bajo', 'Alto'],
+                          child: _slider(
+                            value: _comunicacion,
+                            min: 1, max: 5, divisions: 4,
+                            onChanged: (v) => setState(() => _comunicacion = v),
+                          ),
+                        ),
+                        _divider(),
+                        _ProfileSliderRow(
+                          icon: Icons.menu_book_outlined,
+                          label: 'Horas de estudio',
+                          displayValue: '${_horasEstudio.round()}h/sem',
+                          bottomLabels: const ['1 h', '50 h'],
+                          isLast: true,
+                          child: _slider(
+                            value: _horasEstudio,
+                            min: 1, max: 50, divisions: 49,
+                            onChanged: (v) => setState(() => _horasEstudio = v),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 24),
+                ],
+              ),
+            ),
+          ),
+
+          // ── Botón guardar ─────────────────────────────────────────────
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+            child: SizedBox(
+              width: double.infinity,
+              height: 52,
+              child: ElevatedButton(
+                onPressed: _saving ? null : _saveChanges,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFDC2F26),
+                  foregroundColor: Colors.white,
+                  disabledBackgroundColor:
+                      const Color(0xFFDC2F26).withValues(alpha: 0.5),
+                  shape: const StadiumBorder(),
+                  elevation: 0,
+                  shadowColor: Colors.transparent,
                 ),
-              ],
+                child: Text(
+                  _saving ? 'Guardando...' : 'Aceptar cambios',
+                  style: GoogleFonts.hankenGrotesk(
+                      fontSize: 16, fontWeight: FontWeight.w600),
+                ),
+              ),
             ),
           ),
         ],
@@ -104,100 +345,245 @@ class _ProfilePageState extends State<ProfilePage> {
     );
   }
 
+  // ── Helpers de UI ──────────────────────────────────────────────────────────
+
+  Widget _fieldLabel(String text) => Text(
+        text,
+        style: GoogleFonts.hankenGrotesk(
+          fontSize: 14,
+          fontWeight: FontWeight.w500,
+          color: const Color(0xFF21201B),
+        ),
+      );
+
+  Widget _textField({
+    required TextEditingController controller,
+    required IconData icon,
+  }) {
+    return TextField(
+      controller: controller,
+      style:
+          GoogleFonts.hankenGrotesk(fontSize: 15, color: const Color(0xFF21201B)),
+      decoration: InputDecoration(
+        prefixIcon: Icon(icon, size: 18, color: const Color(0xFF9A978C)),
+        filled: true,
+        fillColor: const Color(0xFFFBFAF4),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: const BorderSide(color: Color(0xFFE7E2D5), width: 1.5),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: const BorderSide(color: Color(0xFFE7E2D5), width: 1.5),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: const BorderSide(color: Color(0xFFDC2F26), width: 1.5),
+        ),
+      ),
+    );
+  }
+
+  Widget _readonlyField({required String value, required IconData icon}) {
+    return Container(
+      height: 52,
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF0EDE2),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE7E2D5), width: 1.5),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: const Color(0xFF9A978C)),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              value,
+              style: GoogleFonts.hankenGrotesk(
+                  fontSize: 15, color: const Color(0xFF6E6B61)),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _divider() => const Divider(
+        height: 1,
+        thickness: 1,
+        color: Color(0xFFE7E2D5),
+        indent: 20,
+        endIndent: 20,
+      );
+
+  Widget _slider({
+    required double value,
+    required double min,
+    required double max,
+    required int divisions,
+    required ValueChanged<double> onChanged,
+  }) {
+    return SliderTheme(
+      data: SliderThemeData(
+        activeTrackColor: const Color(0xFFDC2F26),
+        inactiveTrackColor: const Color(0xFFE7E2D5),
+        thumbColor: Colors.white,
+        overlayColor: const Color(0xFFDC2F26).withValues(alpha: 0.12),
+        thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 11),
+        trackHeight: 4,
+        overlayShape: const RoundSliderOverlayShape(overlayRadius: 22),
+      ),
+      child: Slider(
+        value: value,
+        min: min,
+        max: max,
+        divisions: divisions,
+        onChanged: onChanged,
+      ),
+    );
+  }
+}
+
+// ── AppBar personalizado ──────────────────────────────────────────────────────
+
+class _ProfileAppBar extends StatelessWidget {
+  final String initials;
+  final VoidCallback onBack;
+  final VoidCallback onLogout;
+
+  const _ProfileAppBar({
+    required this.initials,
+    required this.onBack,
+    required this.onLogout,
+  });
+
   @override
   Widget build(BuildContext context) {
-    if (_loading) return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    final top = MediaQuery.of(context).padding.top;
+    return Container(
+      padding: EdgeInsets.fromLTRB(8, top + 8, 16, 16),
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Color(0xFF2A2723), Color(0xFF46413A)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.vertical(bottom: Radius.circular(26)),
+      ),
+      child: Row(
+        children: [
+          IconButton(
+            icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
+            onPressed: onBack,
+          ),
+          Expanded(
+            child: Text(
+              'Mi perfil',
+              style: GoogleFonts.hankenGrotesk(
+                fontSize: 19,
+                fontWeight: FontWeight.w700,
+                color: Colors.white,
+              ),
+            ),
+          ),
+          // Logout button
+          GestureDetector(
+            onTap: onLogout,
+            child: Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(
+                Icons.logout_rounded,
+                color: Colors.white,
+                size: 20,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
 
-    final name = _profile?.fullName ?? AuthSession().email ?? 'Usuario';
-    final email = AuthSession().email ?? 'Sin correo';
+// ── Slider row ────────────────────────────────────────────────────────────────
 
-    return Scaffold(
-      appBar: const PremiumAppBar(titleText: 'Perfiles'),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: Column(
+class _ProfileSliderRow extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String displayValue;
+  final List<String> bottomLabels;
+  final bool isLast;
+  final Widget child;
+
+  const _ProfileSliderRow({
+    required this.icon,
+    required this.label,
+    required this.displayValue,
+    required this.bottomLabels,
+    this.isLast = false,
+    required this.child,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
             children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-                decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(30)),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Expanded(child: Text(name, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold))),
-                    CircleAvatar(backgroundColor: Colors.grey[400], radius: 30),
-                  ],
+              Icon(icon, size: 18, color: const Color(0xFFDC2F26)),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  label,
+                  style: GoogleFonts.hankenGrotesk(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: const Color(0xFF21201B),
+                  ),
                 ),
               ),
-              const SizedBox(height: 24),
-              Container(
-                padding: const EdgeInsets.all(24),
-                decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(30)),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    _buildFieldRow('Nombre', name, () {
-                      _editField('Nombre', name, (val) async {
-                        if (_profile != null) {
-                          await _updateProfileAndReload(UserProfile(
-                            uid: _profile!.uid, fullName: val, birthDate: _profile!.birthDate,
-                            disponibilidad: _profile!.disponibilidad, cargaAcademica: _profile!.cargaAcademica,
-                            trabajoEnEquipo: _profile!.trabajoEnEquipo, comunicacion: _profile!.comunicacion, horasEstudio: _profile!.horasEstudio,
-                          ));
-                        }
-                      });
-                    }),
-                    _buildFieldRow('Correo electrónico', email, () {
-                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Cambia tu correo desde la configuración de tu cuenta.')));
-                    }),
-                    if (_profile != null) ...[
-                      _buildFieldRow('Disponibilidad', _profile!.disponibilidad, () {
-                        _editField('Disponibilidad', _profile!.disponibilidad, (val) async {
-                          await _updateProfileAndReload(UserProfile(uid: _profile!.uid, fullName: _profile!.fullName, birthDate: _profile!.birthDate, disponibilidad: val, cargaAcademica: _profile!.cargaAcademica, trabajoEnEquipo: _profile!.trabajoEnEquipo, comunicacion: _profile!.comunicacion, horasEstudio: _profile!.horasEstudio));
-                        }, options: ['Mañana', 'Tarde', 'Noche', 'Fin de semana']);
-                      }),
-                      _buildFieldRow('Carga académica', _profile!.cargaAcademica, () {
-                        _editField('Carga académica', _profile!.cargaAcademica, (val) async {
-                          await _updateProfileAndReload(UserProfile(uid: _profile!.uid, fullName: _profile!.fullName, birthDate: _profile!.birthDate, disponibilidad: _profile!.disponibilidad, cargaAcademica: val, trabajoEnEquipo: _profile!.trabajoEnEquipo, comunicacion: _profile!.comunicacion, horasEstudio: _profile!.horasEstudio));
-                        }, options: ['Ligera', 'Media', 'Alta']);
-                      }),
-                      _buildFieldRow('Trabajo en equipo', _profile!.trabajoEnEquipo.toString(), () {
-                        _editField('Trabajo en equipo (1-5)', _profile!.trabajoEnEquipo.toString(), (val) async {
-                          final num = int.tryParse(val) ?? 3;
-                          await _updateProfileAndReload(UserProfile(uid: _profile!.uid, fullName: _profile!.fullName, birthDate: _profile!.birthDate, disponibilidad: _profile!.disponibilidad, cargaAcademica: _profile!.cargaAcademica, trabajoEnEquipo: num.clamp(1, 5), comunicacion: _profile!.comunicacion, horasEstudio: _profile!.horasEstudio));
-                        }, isNumeric: true);
-                      }),
-                      _buildFieldRow('Comunicación', _profile!.comunicacion.toString(), () {
-                        _editField('Comunicación (1-5)', _profile!.comunicacion.toString(), (val) async {
-                          final num = int.tryParse(val) ?? 3;
-                          await _updateProfileAndReload(UserProfile(uid: _profile!.uid, fullName: _profile!.fullName, birthDate: _profile!.birthDate, disponibilidad: _profile!.disponibilidad, cargaAcademica: _profile!.cargaAcademica, trabajoEnEquipo: _profile!.trabajoEnEquipo, comunicacion: num.clamp(1, 5), horasEstudio: _profile!.horasEstudio));
-                        }, isNumeric: true);
-                      }),
-                      _buildFieldRow('Horas de estudio semanales', _profile!.horasEstudio.toString(), () {
-                        _editField('Horas de estudio', _profile!.horasEstudio.toString(), (val) async {
-                          final num = int.tryParse(val) ?? 10;
-                          await _updateProfileAndReload(UserProfile(uid: _profile!.uid, fullName: _profile!.fullName, birthDate: _profile!.birthDate, disponibilidad: _profile!.disponibilidad, cargaAcademica: _profile!.cargaAcademica, trabajoEnEquipo: _profile!.trabajoEnEquipo, comunicacion: _profile!.comunicacion, horasEstudio: num.clamp(0, 168)));
-                        }, isNumeric: true);
-                      }),
-                    ],
-                    const SizedBox(height: 24),
-                    ElevatedButton(
-                      onPressed: () => Navigator.pop(context),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFFE51D2A),
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        elevation: 0,
-                      ),
-                      child: const Text('Cerrar', style: TextStyle(fontSize: 16)),
-                    ),
-                  ],
+              Text(
+                displayValue,
+                style: GoogleFonts.hankenGrotesk(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: const Color(0xFFDC2F26),
                 ),
               ),
             ],
           ),
-        ),
+          const SizedBox(height: 6),
+          child,
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(bottomLabels.first,
+                    style: GoogleFonts.hankenGrotesk(
+                        fontSize: 12, color: const Color(0xFF9A978C))),
+                if (bottomLabels.length == 3)
+                  Text(bottomLabels[1],
+                      style: GoogleFonts.hankenGrotesk(
+                          fontSize: 12, color: const Color(0xFF9A978C))),
+                Text(bottomLabels.last,
+                    style: GoogleFonts.hankenGrotesk(
+                        fontSize: 12, color: const Color(0xFF9A978C))),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
