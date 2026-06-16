@@ -35,7 +35,86 @@ class ActivityService {
         .map((doc) => doc.exists ? _fromDoc(doc) : null);
   }
 
-  // ── Activities ──────────────────────────────────────────────────────────────
+  // ── Firestore direct reads ───────────────────────────────────────────────────
+
+  Future<Activity?> getActivityFromFirestore(String id) async {
+    try {
+      final doc = await FirebaseFirestore.instance.collection('activities').doc(id).get();
+      return doc.exists ? _fromDoc(doc) : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  // ── Firestore direct writes (instant, bypasses slow backend) ─────────────────
+
+  /// Updates task fields directly in Firestore. Fast and real-time for all devices.
+  /// Also fires a background REST call to keep backend stats in sync.
+  Future<void> updateTaskDirectly(
+    String activityId,
+    String taskId, {
+    required String status,
+    required String comments,
+    required String files,
+    required String links,
+  }) async {
+    final filesList = files.trim().isEmpty
+        ? <String>[]
+        : files.split('\n').where((s) => s.trim().isNotEmpty).toList();
+    final linksList = links.trim().isEmpty
+        ? <String>[]
+        : links.split('\n').where((s) => s.trim().isNotEmpty).toList();
+
+    final actRef = FirebaseFirestore.instance.collection('activities').doc(activityId);
+    await FirebaseFirestore.instance.runTransaction((tx) async {
+      final snap = await tx.get(actRef);
+      if (!snap.exists) return;
+      final tasks = List<dynamic>.from(
+          (snap.data() as Map<String, dynamic>)['tasks'] ?? []);
+      final idx = tasks.indexWhere(
+          (t) => (t as Map)['id']?.toString() == taskId);
+      if (idx == -1) return;
+      final task = Map<String, dynamic>.from(tasks[idx] as Map);
+      task['status']   = status;
+      task['comments'] = comments;
+      task['files']    = filesList;
+      task['links']    = linksList;
+      tasks[idx] = task;
+      tx.update(actRef, {'tasks': tasks});
+    });
+
+    // Keep backend DB in sync in background (for dashboard stats)
+    ApiClient.put('/api/activities/$activityId/tasks/$taskId', {
+      'status': status,
+      'comments': comments,
+      'files': filesList,
+      'links': linksList,
+    }).catchError((_) {});
+  }
+
+  /// Sets task status to Verificado directly in Firestore.
+  Future<void> verifyTaskDirectly(String activityId, String taskId) async {
+    final actRef = FirebaseFirestore.instance.collection('activities').doc(activityId);
+    await FirebaseFirestore.instance.runTransaction((tx) async {
+      final snap = await tx.get(actRef);
+      if (!snap.exists) return;
+      final tasks = List<dynamic>.from(
+          (snap.data() as Map<String, dynamic>)['tasks'] ?? []);
+      final idx = tasks.indexWhere(
+          (t) => (t as Map)['id']?.toString() == taskId);
+      if (idx == -1) return;
+      final task = Map<String, dynamic>.from(tasks[idx] as Map);
+      task['status'] = 'Verificado';
+      tasks[idx] = task;
+      tx.update(actRef, {'tasks': tasks});
+    });
+
+    // Keep backend in sync in background
+    ApiClient.post('/api/activities/$activityId/tasks/$taskId/verify')
+        .catchError((_) {});
+  }
+
+  // ── Activities REST ──────────────────────────────────────────────────────────
 
   Future<List<Activity>> getActivities() async {
     final list = await ApiClient.get('/api/activities') as List<dynamic>;
@@ -65,10 +144,6 @@ class ActivityService {
     }
   }
 
-  Stream<Activity?> getActivityStream(String id) {
-    return Stream.fromFuture(getActivity(id));
-  }
-
   Future<Activity> createActivity({
     required String name,
     required DateTime dueDate,
@@ -92,7 +167,7 @@ class ActivityService {
     await ApiClient.post('/api/activities/$id/finalize');
   }
 
-  // ── Tasks ────────────────────────────────────────────────────────────────────
+  // ── Tasks REST (kept for non-direct operations) ──────────────────────────────
 
   Future<void> updateTask(
     String activityId,

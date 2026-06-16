@@ -33,7 +33,7 @@ class _TaskDetailsPageState extends State<TaskDetailsPage> {
 
   Future<void> _verifyTask(BuildContext context) async {
     try {
-      await ActivityService().verifyTask(widget.activity.id, _currentTask.id);
+      await ActivityService().verifyTaskDirectly(widget.activity.id, _currentTask.id);
     } catch (e) {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -98,8 +98,8 @@ class _TaskDetailsPageState extends State<TaskDetailsPage> {
                         await Navigator.push(context, MaterialPageRoute(
                           builder: (_) => MemberTaskPage(activity: widget.activity, task: _currentTask, assigneeName: widget.assigneeName),
                         ));
-                        // Refresh task status from parent if needed
-                        final updated = await ActivityService().getActivity(widget.activity.id);
+                        // Read from Firestore directly (fast) instead of REST API (slow)
+                        final updated = await ActivityService().getActivityFromFirestore(widget.activity.id);
                         if (updated != null && mounted) {
                           final idx = updated.tasks.indexWhere((t) => t.id == _currentTask.id);
                           if (idx != -1) setState(() => _currentTask = updated.tasks[idx]);

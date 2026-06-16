@@ -80,7 +80,7 @@ class _MemberTaskPageState extends State<MemberTaskPage> {
   Future<void> _saveTask() async {
     setState(() => _saving = true);
     try {
-      await ActivityService().updateTask(
+      await ActivityService().updateTaskDirectly(
         widget.activity.id,
         widget.task.id,
         status: _status,

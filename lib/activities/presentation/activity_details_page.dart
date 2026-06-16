@@ -30,15 +30,12 @@ class _ActivityDetailsPageState extends State<ActivityDetailsPage> {
     super.initState();
     _currentActivity = widget.activity;
     _showTasks = !widget.isCreationFlow;
-    _fetchLeaderName();
+    _initLeaderName();
     _activitySub = ActivityService()
         .getActivityStreamById(widget.activity.id)
         .listen((updated) {
       if (updated != null && mounted) {
-        setState(() {
-          _currentActivity = updated;
-          _fetchLeaderName();
-        });
+        setState(() => _currentActivity = updated);
       }
     });
   }
@@ -49,23 +46,25 @@ class _ActivityDetailsPageState extends State<ActivityDetailsPage> {
     super.dispose();
   }
 
-  void _fetchLeaderName() {
+  void _initLeaderName() {
     if (_currentActivity.uid == IAuthFacade.instance.currentUserId) {
       _leaderName = 'Tú';
       return;
     }
-    final name = _currentActivity.leaderName;
-    _leaderName = name.isNotEmpty ? name : 'Sin nombre';
-  }
-
-  Future<void> _refresh() async {
-    final updated = await ActivityService().getActivity(_currentActivity.id);
-    if (mounted && updated != null) {
-      setState(() {
-        _currentActivity = updated;
-        _fetchLeaderName();
-      });
+    // Use leaderName if already present (e.g. from creation flow via REST)
+    if (_currentActivity.leaderName.isNotEmpty) {
+      _leaderName = _currentActivity.leaderName;
+      return;
     }
+    // Firestore docs don't have leaderName — fetch once from REST API
+    ActivityService().getActivity(_currentActivity.id).then((activity) {
+      if (!mounted) return;
+      setState(() {
+        _leaderName = (activity?.leaderName.isNotEmpty == true)
+            ? activity!.leaderName
+            : 'Sin nombre';
+      });
+    });
   }
 
   Future<void> _finalizeActivity(BuildContext context) async {
@@ -102,8 +101,7 @@ class _ActivityDetailsPageState extends State<ActivityDetailsPage> {
       }
       return;
     }
-    await _refresh();
-
+    // Firestore stream will update _currentActivity.finalized automatically
     if (!context.mounted) return;
     showDialog(
       context: context,
@@ -219,7 +217,7 @@ class _ActivityDetailsPageState extends State<ActivityDetailsPage> {
                     : () async {
                         try {
                           await ActivityService().assignTasks(_currentActivity.id);
-                          await _refresh();
+                          // Firestore stream updates _currentActivity automatically
                           _showSuccessDialog();
                         } on ApiException catch (e) {
                           if (mounted) {
@@ -306,7 +304,7 @@ class _ActivityDetailsPageState extends State<ActivityDetailsPage> {
                           } else {
                             await Navigator.push(context, MaterialPageRoute(builder: (_) => MemberTaskPage(activity: _currentActivity, task: task, assigneeName: displayName)));
                           }
-                          await _refresh();
+                          // No _refresh() — Firestore stream handles real-time updates
                         },
                         style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFE51D2A), foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)), minimumSize: const Size(60, 36), elevation: 0),
                         child: const Text('Ver', style: TextStyle(fontWeight: FontWeight.bold)),
