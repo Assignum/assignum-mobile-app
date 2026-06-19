@@ -1,0 +1,13 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Assignum">
+  <defs>
+    <linearGradient id="coral" x1="96" y1="40" x2="416" y2="472" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#EC5C50"></stop>
+      <stop offset="1" stop-color="#DC2F26"></stop>
+    </linearGradient>
+  </defs>
+  <rect x="0" y="0" width="512" height="512" rx="154" fill="url(#coral)"></rect>
+  <g transform="translate(92.16 92.16) scale(3.2768)">
+    <path d="M50 16 L74 84 H62.5 L57.2 68.5 H42.8 L37.5 84 H26 L50 16 Z M46.2 58.4 H53.8 L50 35.6 L46.2 58.4 Z" fill="#FFFFFF"></path>
+    <circle cx="50" cy="78" r="4.4" fill="#FFFFFF" fill-opacity="0.55"></circle>
+  </g>
+</svg>
