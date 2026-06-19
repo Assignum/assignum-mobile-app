@@ -26,6 +26,21 @@ class ActivityService {
         .map((snap) => snap.docs.map(_fromDoc).toList());
   }
 
+  /// Stream en tiempo real del número de invitaciones pendientes (sin aceptar).
+  Stream<int> getPendingInvitationsCountStream() {
+    final email = AuthSession().email ?? '';
+    if (email.isEmpty) return Stream.value(0);
+    return FirebaseFirestore.instance
+        .collection('activities')
+        .where('invitedEmails', arrayContains: email)
+        .snapshots()
+        .map((snap) => snap.docs.where((doc) {
+              final accepted =
+                  List<String>.from(doc.data()['acceptedEmails'] ?? []);
+              return !accepted.contains(email);
+            }).length);
+  }
+
   Stream<Activity?> getActivityStreamById(String activityId) {
     return FirebaseFirestore.instance
         .collection('activities')
@@ -149,13 +164,22 @@ class ActivityService {
     String documentLink = '',
     List<ActivityTask> tasks = const [],
   }) async {
+    // Crear la actividad
     final data = await ApiClient.post('/api/activities', {
       'name': name,
       'dueDate': dueDate.toIso8601String().split('T')[0],
       if (documentLink.isNotEmpty) 'documentLink': documentLink,
-      if (tasks.isNotEmpty) 'tasks': tasks.map((t) => {'name': t.name}).toList(),
     }) as Map<String, dynamic>;
-    return Activity.fromMap(data);
+    final activity = Activity.fromMap(data);
+
+    // Enviar tareas al endpoint dedicado si las hay
+    if (tasks.isNotEmpty) {
+      await ApiClient.post('/api/activities/${activity.id}/tasks', {
+        'tasks': tasks.map((t) => t.toCreationMap()).toList(),
+      });
+    }
+
+    return activity;
   }
 
   Future<void> deleteActivity(String id) async {
