@@ -1,129 +1,93 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:assignum/chatbox/domain/chat_message.dart';
-import 'package:assignum/shared/presentation/theme/app_theme.dart';
+
+const _surface  = Color(0xFFFBFAF4);
+const _border   = Color(0xFFE7E2D5);
+const _text     = Color(0xFF21201B);
+const _primary  = Color(0xFFDC2F26);
 
 class ChatBubble extends StatelessWidget {
   final ChatMessage message;
-
-  const ChatBubble({
-    super.key,
-    required this.message,
-  });
+  const ChatBubble({super.key, required this.message});
 
   @override
   Widget build(BuildContext context) {
     final isUser = message.sender == MessageSender.user;
 
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
+      padding: const EdgeInsets.only(bottom: 12),
       child: Row(
-        mainAxisAlignment: isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
-        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment:
+            isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          if (!isUser) ...[
-            _buildBotAvatar(),
-            const SizedBox(width: 8),
-          ],
           Flexible(
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+              constraints: BoxConstraints(
+                maxWidth: MediaQuery.of(context).size.width * 0.75,
+              ),
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 16, vertical: 12),
               decoration: BoxDecoration(
-                color: isUser 
-                    ? AppColors.upcRed 
-                    : Colors.white,
+                color: isUser ? _primary : _surface,
                 borderRadius: BorderRadius.only(
-                  topLeft: const Radius.circular(20),
-                  topRight: const Radius.circular(20),
-                  bottomLeft: Radius.circular(isUser ? 20 : 4),
-                  bottomRight: Radius.circular(isUser ? 4 : 20),
+                  topLeft: const Radius.circular(18),
+                  topRight: const Radius.circular(18),
+                  bottomLeft: Radius.circular(isUser ? 18 : 5),
+                  bottomRight: Radius.circular(isUser ? 5 : 18),
                 ),
+                border: isUser ? null : Border.all(color: _border),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.04),
-                    blurRadius: 6,
-                    offset: const Offset(0, 2),
+                    color: const Color(0xFF3C321E).withValues(alpha: 0.06),
+                    blurRadius: 8,
+                    offset: const Offset(0, 3),
                   ),
                 ],
               ),
-              child: _buildMessageContent(isUser),
+              child: _buildContent(isUser),
             ),
           ),
-          if (isUser) ...[
-            const SizedBox(width: 8),
-            _buildUserAvatar(),
-          ],
         ],
       ),
     );
   }
 
-  Widget _buildBotAvatar() {
-    return Container(
-      width: 36,
-      height: 36,
-      decoration: BoxDecoration(
-        color: AppColors.upcBlack.withValues(alpha: 0.1),
-        shape: BoxShape.circle,
-      ),
-      child: const Icon(
-        Icons.smart_toy_rounded,
-        color: AppColors.upcRed,
-        size: 20,
-      ),
+  Widget _buildContent(bool isUser) {
+    final baseStyle = GoogleFonts.hankenGrotesk(
+      color: isUser ? Colors.white : _text,
+      fontSize: 14.5,
+      height: 1.5,
     );
+    return _parseMarkdown(message.text, baseStyle, isUser);
   }
 
-  Widget _buildUserAvatar() {
-    return Container(
-      width: 36,
-      height: 36,
-      decoration: const BoxDecoration(
-        color: AppColors.upcRed,
-        shape: BoxShape.circle,
-      ),
-      child: const Icon(
-        Icons.person_rounded,
-        color: Colors.white,
-        size: 20,
-      ),
-    );
-  }
+  // Renders **bold** as red+bold for bot, white+bold for user
+  Widget _parseMarkdown(String text, TextStyle base, bool isUser) {
+    final regex = RegExp(r'\*\*(.*?)\*\*');
+    final spans = <TextSpan>[];
+    int last = 0;
 
-  Widget _buildMessageContent(bool isUser) {
-    final TextStyle baseStyle = TextStyle(
-      color: isUser ? Colors.white : AppColors.upcBlack,
-      fontSize: 15,
-      height: 1.4,
-    );
-
-    return _parseMarkdownText(message.text, baseStyle);
-  }
-
-  Widget _parseMarkdownText(String text, TextStyle baseStyle) {
-    final RegExp regex = RegExp(r'\*\*(.*?)\*\*');
-    final List<TextSpan> spans = [];
-    int lastMatchEnd = 0;
-
-    for (final match in regex.allMatches(text)) {
-      if (match.start > lastMatchEnd) {
-        spans.add(TextSpan(text: text.substring(lastMatchEnd, match.start)));
+    for (final m in regex.allMatches(text)) {
+      if (m.start > last) {
+        spans.add(TextSpan(text: text.substring(last, m.start)));
       }
       spans.add(TextSpan(
-        text: match.group(1),
-        style: baseStyle.copyWith(fontWeight: FontWeight.bold),
+        text: m.group(1),
+        style: base.copyWith(
+          fontWeight: FontWeight.w700,
+          color: isUser ? Colors.white : _primary,
+        ),
       ));
-      lastMatchEnd = match.end;
+      last = m.end;
     }
-
-    if (lastMatchEnd < text.length) {
-      spans.add(TextSpan(text: text.substring(lastMatchEnd)));
+    if (last < text.length) {
+      spans.add(TextSpan(text: text.substring(last)));
     }
 
     return RichText(
-      text: TextSpan(
-        style: baseStyle,
-        children: spans,
-      ),
+      text: TextSpan(style: base, children: spans),
     );
   }
 }

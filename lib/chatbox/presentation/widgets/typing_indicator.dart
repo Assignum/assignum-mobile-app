@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:assignum/shared/presentation/theme/app_theme.dart';
+
+const _surface = Color(0xFFFBFAF4);
+const _border  = Color(0xFFE7E2D5);
+const _dot     = Color(0xFF9A978C);
 
 class TypingIndicator extends StatefulWidget {
   const TypingIndicator({super.key});
@@ -10,12 +13,12 @@ class TypingIndicator extends StatefulWidget {
 
 class _TypingIndicatorState extends State<TypingIndicator>
     with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
+  late AnimationController _ctrl;
 
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(
+    _ctrl = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1200),
     )..repeat();
@@ -23,78 +26,57 @@ class _TypingIndicatorState extends State<TypingIndicator>
 
   @override
   void dispose() {
-    _controller.dispose();
+    _ctrl.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
+      padding: const EdgeInsets.only(bottom: 12),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.start,
-        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Container(
-            width: 36,
-            height: 36,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: BoxDecoration(
-              color: AppColors.upcBlack.withValues(alpha: 0.1),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(
-              Icons.smart_toy_rounded,
-              color: AppColors.upcRed,
-              size: 20,
-            ),
-          ),
-          const SizedBox(width: 8),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
-            decoration: BoxDecoration(
-              color: Colors.white,
+              color: _surface,
               borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(20),
-                topRight: Radius.circular(20),
-                bottomLeft: Radius.circular(4),
-                bottomRight: Radius.circular(20),
+                topLeft: Radius.circular(18),
+                topRight: Radius.circular(18),
+                bottomLeft: Radius.circular(5),
+                bottomRight: Radius.circular(18),
               ),
+              border: Border.all(color: _border),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.04),
-                  blurRadius: 6,
-                  offset: const Offset(0, 2),
+                  color: const Color(0xFF3C321E).withValues(alpha: 0.06),
+                  blurRadius: 8,
+                  offset: const Offset(0, 3),
                 ),
               ],
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
-              children: List.generate(3, (index) {
+              children: List.generate(3, (i) {
                 return AnimatedBuilder(
-                  animation: _controller,
-                  builder: (context, child) {
-                    // Stagger the animations
-                    final double delay = index * 0.2;
-                    final double progress = (_controller.value - delay) % 1.0;
-                    
-                    // Bouncing curve
-                    double yOffset = 0.0;
+                  animation: _ctrl,
+                  builder: (_, __) {
+                    final delay = i * 0.2;
+                    final progress = (_ctrl.value - delay) % 1.0;
+                    double y = 0;
                     if (progress < 0.5) {
-                      yOffset = -5 * (progress * 2); // Going up
-                    } else if (progress < 1.0) {
-                      yOffset = -5 * (2 - progress * 2); // Coming down
+                      y = -5 * (progress * 2);
+                    } else {
+                      y = -5 * (2 - progress * 2);
                     }
-
                     return Transform.translate(
-                      offset: Offset(0, yOffset),
+                      offset: Offset(0, y),
                       child: Container(
-                        margin: const EdgeInsets.symmetric(horizontal: 2.0),
-                        width: 7,
-                        height: 7,
+                        margin: const EdgeInsets.symmetric(horizontal: 2.5),
+                        width: 7, height: 7,
                         decoration: const BoxDecoration(
-                          color: AppColors.upcGray,
-                          shape: BoxShape.circle,
-                        ),
+                          color: _dot, shape: BoxShape.circle),
                       ),
                     );
                   },
