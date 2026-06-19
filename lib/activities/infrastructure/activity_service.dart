@@ -21,7 +21,6 @@ class ActivityService {
         .where(Filter.or(
           Filter('uid', isEqualTo: uid),
           Filter('acceptedEmails', arrayContains: email),
-          Filter('invitedEmails',  arrayContains: email),
         ))
         .snapshots()
         .map((snap) => snap.docs.map(_fromDoc).toList());

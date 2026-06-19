@@ -33,6 +33,22 @@ class _HomePageState extends State<HomePage> {
   final _scaffoldKey = GlobalKey<ScaffoldState>();
   final _userService = UserService();
   final _activityService = ActivityService();
+  int _pendingInvitations = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadInvitations();
+  }
+
+  Future<void> _loadInvitations() async {
+    try {
+      final list = await _activityService.getPendingInvitations();
+      if (mounted) setState(() => _pendingInvitations = list.length);
+    } catch (_) {
+      // No interrumpir el home si falla la carga de invitaciones
+    }
+  }
 
   String _getGreeting() {
     final h = DateTime.now().hour;
@@ -80,7 +96,7 @@ class _HomePageState extends State<HomePage> {
                 myTasks.where((t) => t.status == 'Verificado').length;
             final pendingTasks = myTasks
                 .where((t) =>
-                    t.status == 'Pendiente' || t.status == 'En progreso')
+                    t.status == 'Pendiente' || t.status == 'En Progreso')
                 .length;
             final totalTasks = myTasks.length;
             final progress =
@@ -100,8 +116,13 @@ class _HomePageState extends State<HomePage> {
                     firstName: _firstName(name),
                     initials: initials,
                     onMenuTap: () => _scaffoldKey.currentState?.openDrawer(),
-                    onNotificationTap: () => _go(const NotificationsPage()),
+                    onNotificationTap: () async {
+                      await Navigator.push(context,
+                          MaterialPageRoute(builder: (_) => const NotificationsPage()));
+                      _loadInvitations();
+                    },
                     onAvatarTap: () => _go(const ProfilePage()),
+                    hasPendingNotifications: _pendingInvitations > 0,
                   ),
 
                   // Progress card
@@ -139,7 +160,7 @@ class _HomePageState extends State<HomePage> {
                             icon: Icons.notifications_outlined,
                             iconBg: const Color(0xFFDDF0E4),
                             iconColor: const Color(0xFF4A8C6A),
-                            value: '$pendingTasks',
+                            value: '$_pendingInvitations',
                             label: 'Notificaciones',
                             onTap: () => _go(const NotificationsPage()),
                           ),
@@ -369,6 +390,7 @@ class _HomeAppBar extends StatelessWidget {
   final VoidCallback onMenuTap;
   final VoidCallback onNotificationTap;
   final VoidCallback onAvatarTap;
+  final bool hasPendingNotifications;
 
   const _HomeAppBar({
     required this.greeting,
@@ -377,6 +399,7 @@ class _HomeAppBar extends StatelessWidget {
     required this.onMenuTap,
     required this.onNotificationTap,
     required this.onAvatarTap,
+    this.hasPendingNotifications = false,
   });
 
   @override
@@ -417,8 +440,6 @@ class _HomeAppBar extends StatelessWidget {
                             fontSize: 22,
                             fontWeight: FontWeight.w700,
                             color: Colors.white)),
-                    const SizedBox(width: 6),
-                    const Text('👋', style: TextStyle(fontSize: 18)),
                   ],
                 ),
               ],
@@ -429,7 +450,7 @@ class _HomeAppBar extends StatelessWidget {
           _AppBarBtn(
             icon: Icons.notifications_outlined,
             onTap: onNotificationTap,
-            badge: true,
+            badge: hasPendingNotifications,
           ),
           const SizedBox(width: 10),
 
