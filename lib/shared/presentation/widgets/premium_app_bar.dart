@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:assignum/shared/presentation/theme/app_theme.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:assignum/core/infrastructure/auth_session.dart';
 import 'package:assignum/iam/infrastructure/user_service.dart';
 import 'package:assignum/iam/domain/user_profile.dart';
 import 'package:assignum/iam/presentation/profile_page.dart';
@@ -27,21 +27,9 @@ class PremiumAppBar extends StatelessWidget implements PreferredSizeWidget {
 
   @override
   Widget build(BuildContext context) {
-    final auth = FirebaseAuth.instance;
-    final userService = UserService();
-    final user = auth.currentUser;
-
     return AppBar(
       title: titleWidget ?? (titleText != null
-          ? Text(
-              titleText!,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                letterSpacing: 0.5,
-              ),
-            )
+          ? Text(titleText!, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold, letterSpacing: 0.5))
           : null),
       centerTitle: true,
       backgroundColor: Colors.transparent,
@@ -49,50 +37,31 @@ class PremiumAppBar extends StatelessWidget implements PreferredSizeWidget {
       iconTheme: const IconThemeData(color: Colors.white),
       automaticallyImplyLeading: automaticallyImplyLeading,
       leading: leading,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(
-          bottom: Radius.circular(24),
-        ),
-      ),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(bottom: Radius.circular(24))),
       flexibleSpace: Container(
         decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            colors: [AppColors.upcBlack, Color(0xFF2C2C2C)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-          borderRadius: BorderRadius.vertical(
-            bottom: Radius.circular(24),
-          ),
+          gradient: LinearGradient(colors: [AppColors.upcBlack, Color(0xFF2C2C2C)], begin: Alignment.topLeft, end: Alignment.bottomRight),
+          borderRadius: BorderRadius.vertical(bottom: Radius.circular(24)),
         ),
       ),
       actions: [
         if (actions != null) ...actions!,
-        if (showProfileAvatar && user != null)
+        if (showProfileAvatar && AuthSession().isLoggedIn)
           StreamBuilder<UserProfile?>(
-            stream: userService.getProfileStream(user.uid),
+            stream: UserService().getProfileStream(),
             builder: (context, snapshot) {
-              final name = snapshot.data?.fullName ?? user.displayName ?? 'Usuario';
+              final name = snapshot.data?.fullName ?? AuthSession().email ?? 'Usuario';
               final initials = name.trim().split(' ').map((e) => e[0].toUpperCase()).take(2).join();
               return Padding(
                 padding: const EdgeInsets.only(right: 16.0),
                 child: GestureDetector(
-                  onTap: () {
-                    Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfilePage()));
-                  },
+                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfilePage())),
                   child: MouseRegion(
                     cursor: SystemMouseCursors.click,
                     child: CircleAvatar(
                       backgroundColor: AppColors.upcRed,
                       radius: 18,
-                      child: Text(
-                        initials.isNotEmpty ? initials : 'U',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 13,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
+                      child: Text(initials.isNotEmpty ? initials : 'U', style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
                     ),
                   ),
                 ),

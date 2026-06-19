@@ -39,7 +39,7 @@ class ChatBubble extends StatelessWidget {
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.04),
+                    color: Colors.black.withValues(alpha: 0.04),
                     blurRadius: 6,
                     offset: const Offset(0, 2),
                   ),
@@ -62,7 +62,7 @@ class ChatBubble extends StatelessWidget {
       width: 36,
       height: 36,
       decoration: BoxDecoration(
-        color: AppColors.upcBlack.withOpacity(0.1),
+        color: AppColors.upcBlack.withValues(alpha: 0.1),
         shape: BoxShape.circle,
       ),
       child: const Icon(

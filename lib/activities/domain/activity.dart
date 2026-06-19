@@ -1,9 +1,9 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:assignum/activities/domain/activity_task.dart';
 
 class Activity {
   final String id;
   final String uid;
+  final String leaderName;
   final String name;
   final DateTime dueDate;
   final String documentLink;
@@ -16,6 +16,7 @@ class Activity {
   Activity({
     required this.id,
     required this.uid,
+    this.leaderName = '',
     required this.name,
     required this.dueDate,
     required this.documentLink,
@@ -26,25 +27,11 @@ class Activity {
     this.finalized = false,
   });
 
-  Map<String, dynamic> toMap() {
-    return {
-      'id': id,
-      'uid': uid,
-      'name': name,
-      'dueDate': dueDate.toIso8601String(),
-      'documentLink': documentLink,
-      'tasks': tasks.map((e) => e.toMap()).toList(),
-      'invitedEmails': invitedEmails,
-      'acceptedEmails': acceptedEmails,
-      'memberNames': memberNames,
-      'finalized': finalized,
-    };
-  }
-
   factory Activity.fromMap(Map<String, dynamic> map) {
     return Activity(
       id: map['id'] ?? '',
       uid: map['uid'] ?? '',
+      leaderName: map['leaderName'] as String? ?? '',
       name: map['name'] ?? '',
       dueDate: DateTime.tryParse(map['dueDate'] ?? '') ?? DateTime.now(),
       documentLink: map['documentLink'] ?? '',
