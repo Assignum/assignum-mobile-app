@@ -20,15 +20,11 @@ class _ProfilePageState extends State<ProfilePage> {
   bool _saving = false;
   UserProfile? _profile;
 
-  // Sliders de disponibilidad y carga (mapeados a posiciones)
-  double _disponibilidad = 2; // 1=Mañana, 2=Tarde, 3=Noche
-  double _cargaAcademica = 2; // 1=Ligera, 2=Media, 3=Alta
-  double _trabajoEnEquipo = 3;
-  double _comunicacion = 3;
-  double _horasEstudio = 20;
-
-  static const _disponibilidadLabels = ['Mañana', 'Tarde', 'Noche'];
-  static const _cargaLabels = ['Ligera', 'Media', 'Alta'];
+  double _teamwork     = 3;
+  double _communication= 3;
+  double _leadership   = 3;
+  double _organization = 3;
+  double _hours        = 10;
 
   @override
   void initState() {
@@ -50,32 +46,14 @@ class _ProfilePageState extends State<ProfilePage> {
       _loading = false;
       if (p != null) {
         _nameCtrl.text = p.fullName;
-        _disponibilidad = _dispToSlider(p.disponibilidad);
-        _cargaAcademica = _cargaToSlider(p.cargaAcademica);
-        _trabajoEnEquipo = p.trabajoEnEquipo.toDouble().clamp(1, 5);
-        _comunicacion = p.comunicacion.toDouble().clamp(1, 5);
-        _horasEstudio = p.horasEstudio.toDouble().clamp(1, 50);
+        _teamwork      = p.teamworkSkill.toDouble().clamp(1, 5);
+        _communication = p.communicationSkill.toDouble().clamp(1, 5);
+        _leadership    = p.leadershipSkill.toDouble().clamp(1, 5);
+        _organization  = p.organizationSkill.toDouble().clamp(1, 5);
+        _hours         = p.availableHoursPerWeek.toDouble().clamp(1, 40);
       }
     });
   }
-
-  double _dispToSlider(String v) {
-    if (v == 'Mañana') return 1;
-    if (v == 'Tarde') return 2;
-    return 3; // Noche
-  }
-
-  double _cargaToSlider(String v) {
-    if (v == 'Ligera') return 1;
-    if (v == 'Media') return 2;
-    return 3; // Alta
-  }
-
-  String get _disponibilidadStr =>
-      _disponibilidadLabels[(_disponibilidad - 1).round().clamp(0, 2)];
-
-  String get _cargaStr =>
-      _cargaLabels[(_cargaAcademica - 1).round().clamp(0, 2)];
 
   Future<void> _saveChanges() async {
     if (_saving || _profile == null) return;
@@ -91,11 +69,22 @@ class _ProfilePageState extends State<ProfilePage> {
       uid: _profile!.uid,
       fullName: _nameCtrl.text.trim(),
       birthDate: _profile!.birthDate,
-      disponibilidad: _disponibilidadStr,
-      cargaAcademica: _cargaStr,
-      trabajoEnEquipo: _trabajoEnEquipo.round(),
-      comunicacion: _comunicacion.round(),
-      horasEstudio: _horasEstudio.round(),
+      backendSkill:            _profile!.backendSkill,
+      frontendSkill:           _profile!.frontendSkill,
+      databaseSkill:           _profile!.databaseSkill,
+      testingSkill:            _profile!.testingSkill,
+      documentationSkill:      _profile!.documentationSkill,
+      gitGithubSkill:          _profile!.gitGithubSkill,
+      agileMethodologiesSkill: _profile!.agileMethodologiesSkill,
+      teamworkSkill:           _teamwork.round(),
+      communicationSkill:      _communication.round(),
+      leadershipSkill:         _leadership.round(),
+      organizationSkill:       _organization.round(),
+      projectsCompleted:       _profile!.projectsCompleted,
+      availableHoursPerWeek:   _hours.round(),
+      lastRole:                _profile!.lastRole,
+      lastRolePerformance:     _profile!.lastRolePerformance,
+      peerEvaluation:          _profile!.peerEvaluation,
     );
 
     await _userService.createOrUpdateProfile(updated);
@@ -246,63 +235,63 @@ class _ProfilePageState extends State<ProfilePage> {
                     child: Column(
                       children: [
                         _ProfileSliderRow(
-                          icon: Icons.schedule_outlined,
-                          label: 'Disponibilidad',
-                          displayValue: _disponibilidadStr,
-                          bottomLabels: const ['Mañana', 'Tarde', 'Noche'],
-                          child: _slider(
-                            value: _disponibilidad,
-                            min: 1, max: 3, divisions: 2,
-                            onChanged: (v) => setState(() => _disponibilidad = v),
-                          ),
-                        ),
-                        _divider(),
-                        _ProfileSliderRow(
-                          icon: Icons.school_outlined,
-                          label: 'Carga académica',
-                          displayValue: _cargaStr,
-                          bottomLabels: const ['Ligera', 'Media', 'Alta'],
-                          child: _slider(
-                            value: _cargaAcademica,
-                            min: 1, max: 3, divisions: 2,
-                            onChanged: (v) => setState(() => _cargaAcademica = v),
-                          ),
-                        ),
-                        _divider(),
-                        _ProfileSliderRow(
                           icon: Icons.groups_2_outlined,
                           label: 'Trabajo en equipo',
-                          displayValue: '${_trabajoEnEquipo.round()}/5',
+                          displayValue: '${_teamwork.round()}/5',
                           bottomLabels: const ['Bajo', 'Alto'],
                           child: _slider(
-                            value: _trabajoEnEquipo,
+                            value: _teamwork,
                             min: 1, max: 5, divisions: 4,
-                            onChanged: (v) => setState(() => _trabajoEnEquipo = v),
+                            onChanged: (v) => setState(() => _teamwork = v),
                           ),
                         ),
                         _divider(),
                         _ProfileSliderRow(
                           icon: Icons.chat_bubble_outline_rounded,
                           label: 'Comunicación',
-                          displayValue: '${_comunicacion.round()}/5',
+                          displayValue: '${_communication.round()}/5',
                           bottomLabels: const ['Bajo', 'Alto'],
                           child: _slider(
-                            value: _comunicacion,
+                            value: _communication,
                             min: 1, max: 5, divisions: 4,
-                            onChanged: (v) => setState(() => _comunicacion = v),
+                            onChanged: (v) => setState(() => _communication = v),
                           ),
                         ),
                         _divider(),
                         _ProfileSliderRow(
-                          icon: Icons.menu_book_outlined,
-                          label: 'Horas de estudio',
-                          displayValue: '${_horasEstudio.round()}h/sem',
-                          bottomLabels: const ['1 h', '50 h'],
+                          icon: Icons.star_outline_rounded,
+                          label: 'Liderazgo',
+                          displayValue: '${_leadership.round()}/5',
+                          bottomLabels: const ['Bajo', 'Alto'],
+                          child: _slider(
+                            value: _leadership,
+                            min: 1, max: 5, divisions: 4,
+                            onChanged: (v) => setState(() => _leadership = v),
+                          ),
+                        ),
+                        _divider(),
+                        _ProfileSliderRow(
+                          icon: Icons.calendar_today_outlined,
+                          label: 'Organización',
+                          displayValue: '${_organization.round()}/5',
+                          bottomLabels: const ['Bajo', 'Alto'],
+                          child: _slider(
+                            value: _organization,
+                            min: 1, max: 5, divisions: 4,
+                            onChanged: (v) => setState(() => _organization = v),
+                          ),
+                        ),
+                        _divider(),
+                        _ProfileSliderRow(
+                          icon: Icons.schedule_outlined,
+                          label: 'Horas disponibles / semana',
+                          displayValue: '${_hours.round()} h',
+                          bottomLabels: const ['1 h', '40 h'],
                           isLast: true,
                           child: _slider(
-                            value: _horasEstudio,
-                            min: 1, max: 50, divisions: 49,
-                            onChanged: (v) => setState(() => _horasEstudio = v),
+                            value: _hours,
+                            min: 1, max: 40, divisions: 39,
+                            onChanged: (v) => setState(() => _hours = v),
                           ),
                         ),
                       ],

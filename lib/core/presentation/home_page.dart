@@ -33,21 +33,13 @@ class _HomePageState extends State<HomePage> {
   final _scaffoldKey = GlobalKey<ScaffoldState>();
   final _userService = UserService();
   final _activityService = ActivityService();
-  int _pendingInvitations = 0;
+  late final Stream<int> _invitationCountStream;
 
   @override
   void initState() {
     super.initState();
-    _loadInvitations();
-  }
-
-  Future<void> _loadInvitations() async {
-    try {
-      final list = await _activityService.getPendingInvitations();
-      if (mounted) setState(() => _pendingInvitations = list.length);
-    } catch (_) {
-      // No interrumpir el home si falla la carga de invitaciones
-    }
+    _invitationCountStream =
+        _activityService.getPendingInvitationsCountStream();
   }
 
   String _getGreeting() {
@@ -102,7 +94,11 @@ class _HomePageState extends State<HomePage> {
             final progress =
                 totalTasks > 0 ? completedTasks / totalTasks : 0.0;
 
-            return Scaffold(
+            return StreamBuilder<int>(
+              stream: _invitationCountStream,
+              builder: (context, invSnap) {
+                final invCount = invSnap.data ?? 0;
+                return Scaffold(
               key: _scaffoldKey,
               backgroundColor: _bg,
               drawer: _buildDrawer(name, initials),
@@ -116,13 +112,10 @@ class _HomePageState extends State<HomePage> {
                     firstName: _firstName(name),
                     initials: initials,
                     onMenuTap: () => _scaffoldKey.currentState?.openDrawer(),
-                    onNotificationTap: () async {
-                      await Navigator.push(context,
-                          MaterialPageRoute(builder: (_) => const NotificationsPage()));
-                      _loadInvitations();
-                    },
+                    onNotificationTap: () =>
+                        _go(const NotificationsPage()),
                     onAvatarTap: () => _go(const ProfilePage()),
-                    hasPendingNotifications: _pendingInvitations > 0,
+                    hasPendingNotifications: invCount > 0,
                   ),
 
                   // Progress card
@@ -160,7 +153,7 @@ class _HomePageState extends State<HomePage> {
                             icon: Icons.notifications_outlined,
                             iconBg: const Color(0xFFDDF0E4),
                             iconColor: const Color(0xFF4A8C6A),
-                            value: '$_pendingInvitations',
+                            value: '$invCount',
                             label: 'Notificaciones',
                             onTap: () => _go(const NotificationsPage()),
                           ),
@@ -230,6 +223,8 @@ class _HomePageState extends State<HomePage> {
                   ),
                 ],
               ),
+            );
+              },
             );
           },
         );

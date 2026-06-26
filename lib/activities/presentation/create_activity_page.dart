@@ -100,85 +100,14 @@ class _CreateActivityPageState extends State<CreateActivityPage> {
   // ── Add task sheet ───────────────────────────────────────────────────
 
   void _showAddTaskSheet() {
-    final ctrl = TextEditingController();
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: _surface2,
       shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-      builder: (ctx) => Padding(
-        padding: EdgeInsets.fromLTRB(
-            20, 20, 20, MediaQuery.of(ctx).viewInsets.bottom + 24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(
-                width: 36, height: 4,
-                decoration: BoxDecoration(
-                    color: _border, borderRadius: BorderRadius.circular(999)),
-              ),
-            ),
-            const SizedBox(height: 20),
-            Text('Nueva tarea',
-                style: GoogleFonts.hankenGrotesk(
-                    fontSize: 17, fontWeight: FontWeight.w700, color: _text)),
-            const SizedBox(height: 14),
-            Container(
-              decoration: BoxDecoration(
-                color: _surface,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: _border),
-              ),
-              child: TextField(
-                controller: ctrl,
-                autofocus: true,
-                style: GoogleFonts.hankenGrotesk(fontSize: 14, color: _text),
-                textCapitalization: TextCapitalization.sentences,
-                decoration: InputDecoration(
-                  border: InputBorder.none,
-                  contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 16, vertical: 14),
-                  hintText: 'Nombre de la tarea',
-                  hintStyle: GoogleFonts.hankenGrotesk(
-                      fontSize: 14, color: _text3),
-                ),
-                onSubmitted: (_) {
-                  final v = ctrl.text.trim();
-                  if (v.isNotEmpty) {
-                    setState(() => _tasks.add(ActivityTask(name: v)));
-                    Navigator.pop(ctx);
-                  }
-                },
-              ),
-            ),
-            const SizedBox(height: 12),
-            SizedBox(
-              width: double.infinity, height: 50,
-              child: ElevatedButton(
-                onPressed: () {
-                  final v = ctrl.text.trim();
-                  if (v.isNotEmpty) {
-                    setState(() => _tasks.add(ActivityTask(name: v)));
-                    Navigator.pop(ctx);
-                  }
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: _primary,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(999)),
-                  elevation: 0,
-                ),
-                child: Text('Añadir',
-                    style: GoogleFonts.hankenGrotesk(
-                        fontSize: 14, fontWeight: FontWeight.w700)),
-              ),
-            ),
-          ],
-        ),
+      builder: (ctx) => _AddTaskSheet(
+        onAdd: (task) => setState(() => _tasks.add(task)),
       ),
     );
   }
@@ -499,6 +428,272 @@ class _CreateActivityPageState extends State<CreateActivityPage> {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+// ── Add task bottom sheet ──────────────────────────────────────────────
+
+class _AddTaskSheet extends StatefulWidget {
+  final void Function(ActivityTask task) onAdd;
+  const _AddTaskSheet({required this.onAdd});
+
+  @override
+  State<_AddTaskSheet> createState() => _AddTaskSheetState();
+}
+
+class _AddTaskSheetState extends State<_AddTaskSheet> {
+  final _nameCtrl = TextEditingController();
+
+  String _taskType       = 'Backend';
+  String _taskComplexity = 'Medium';
+  String _priority       = 'Medium';
+  double _hours          = 5;
+
+  static const _taskTypes = [
+    'Backend', 'Frontend', 'Testing',
+    'Database', 'Documentation', 'Management',
+  ];
+  static const _complexities = ['Low', 'Medium', 'High'];
+  static const _priorities   = ['Low', 'Medium', 'High'];
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final name = _nameCtrl.text.trim();
+    if (name.isEmpty) return;
+    widget.onAdd(ActivityTask(
+      name: name,
+      taskType: _taskType,
+      taskComplexity: _taskComplexity,
+      priority: _priority,
+      estimatedHours: _hours.round(),
+    ));
+    Navigator.pop(context);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+          20, 20, 20, MediaQuery.of(context).viewInsets.bottom + 24),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Handle
+            Center(
+              child: Container(
+                width: 36, height: 4,
+                decoration: BoxDecoration(
+                    color: _border, borderRadius: BorderRadius.circular(999)),
+              ),
+            ),
+            const SizedBox(height: 20),
+            Text('Nueva tarea',
+                style: GoogleFonts.hankenGrotesk(
+                    fontSize: 17, fontWeight: FontWeight.w700, color: _text)),
+            const SizedBox(height: 14),
+
+            // ── Nombre ────────────────────────────────────────────────
+            Container(
+              decoration: BoxDecoration(
+                color: _surface,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: _border),
+              ),
+              child: TextField(
+                controller: _nameCtrl,
+                autofocus: true,
+                style: GoogleFonts.hankenGrotesk(fontSize: 14, color: _text),
+                textCapitalization: TextCapitalization.sentences,
+                decoration: InputDecoration(
+                  border: InputBorder.none,
+                  contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16, vertical: 14),
+                  hintText: 'Nombre de la tarea',
+                  hintStyle:
+                      GoogleFonts.hankenGrotesk(fontSize: 14, color: _text3),
+                ),
+                onSubmitted: (_) => _submit(),
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // ── Selectores ────────────────────────────────────────────
+            Container(
+              decoration: BoxDecoration(
+                color: _surface,
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: _border),
+              ),
+              child: Column(
+                children: [
+                  _DropRow(
+                    icon: Icons.category_outlined,
+                    label: 'Tipo de tarea',
+                    value: _taskType,
+                    items: _taskTypes,
+                    onChanged: (v) => setState(() => _taskType = v!),
+                  ),
+                  _divider(),
+                  _DropRow(
+                    icon: Icons.layers_outlined,
+                    label: 'Complejidad',
+                    value: _taskComplexity,
+                    items: _complexities,
+                    onChanged: (v) => setState(() => _taskComplexity = v!),
+                  ),
+                  _divider(),
+                  _DropRow(
+                    icon: Icons.flag_outlined,
+                    label: 'Prioridad',
+                    value: _priority,
+                    items: _priorities,
+                    onChanged: (v) => setState(() => _priority = v!),
+                  ),
+                  _divider(),
+                  // Horas estimadas
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(Icons.access_time_outlined,
+                                size: 18, color: _primary),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text('Horas estimadas',
+                                  style: GoogleFonts.hankenGrotesk(
+                                    fontSize: 14, fontWeight: FontWeight.w600,
+                                    color: _text)),
+                            ),
+                            Text('${_hours.round()} h',
+                                style: GoogleFonts.hankenGrotesk(
+                                    fontSize: 13, fontWeight: FontWeight.w700,
+                                    color: _primary)),
+                          ],
+                        ),
+                        SliderTheme(
+                          data: SliderThemeData(
+                            activeTrackColor: _primary,
+                            inactiveTrackColor: _border,
+                            thumbColor: Colors.white,
+                            overlayColor: _primary.withValues(alpha: 0.12),
+                            thumbShape: const RoundSliderThumbShape(
+                                enabledThumbRadius: 10),
+                            trackHeight: 4,
+                          ),
+                          child: Slider(
+                            value: _hours,
+                            min: 1, max: 100, divisions: 99,
+                            onChanged: (v) => setState(() => _hours = v),
+                          ),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 4),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text('1 h', style: GoogleFonts.hankenGrotesk(
+                                  fontSize: 11.5, color: _text3)),
+                              Text('100 h', style: GoogleFonts.hankenGrotesk(
+                                  fontSize: 11.5, color: _text3)),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // ── Botón añadir ──────────────────────────────────────────
+            SizedBox(
+              width: double.infinity, height: 50,
+              child: ElevatedButton(
+                onPressed: _submit,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _primary,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(999)),
+                  elevation: 0,
+                ),
+                child: Text('Añadir tarea',
+                    style: GoogleFonts.hankenGrotesk(
+                        fontSize: 14, fontWeight: FontWeight.w700)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _divider() => const Divider(
+      height: 1, thickness: 1, color: _border, indent: 16, endIndent: 16);
+}
+
+class _DropRow extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+  final List<String> items;
+  final ValueChanged<String?> onChanged;
+
+  const _DropRow({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.items,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: _primary),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(label,
+                style: GoogleFonts.hankenGrotesk(
+                    fontSize: 14, fontWeight: FontWeight.w600, color: _text)),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: _surfaceInset,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: _border),
+            ),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                value: value,
+                isDense: true,
+                style: GoogleFonts.hankenGrotesk(
+                    fontSize: 13, fontWeight: FontWeight.w600, color: _text),
+                items: items
+                    .map((i) => DropdownMenuItem(value: i, child: Text(i)))
+                    .toList(),
+                onChanged: onChanged,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

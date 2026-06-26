@@ -184,7 +184,7 @@ class _HeroScene extends StatelessWidget {
             ),
           ),
 
-          // Logo "A" central — Positioned directo en Stack, _FloatOffset adentro
+          // Logo central — Positioned directo en Stack, _FloatOffset adentro
           Positioned(
             left: w / 2 - 56,
             top: h / 2 - 60,
@@ -206,15 +206,11 @@ class _HeroScene extends StatelessWidget {
                     ),
                   ],
                 ),
-                child: Center(
-                  child: Text(
-                    'A',
-                    style: GoogleFonts.newsreader(
-                      fontSize: 60,
-                      fontWeight: FontWeight.w400,
-                      fontStyle: FontStyle.italic,
-                      color: Colors.white,
-                    ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(28),
+                  child: Image.asset(
+                    'public/brand/assignum-icon-256.png',
+                    fit: BoxFit.cover,
                   ),
                 ),
               ),
