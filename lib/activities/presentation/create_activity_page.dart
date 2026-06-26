@@ -65,6 +65,20 @@ class _CreateActivityPageState extends State<CreateActivityPage> {
 
   void _removeTask(int i) => setState(() => _tasks.removeAt(i));
 
+  void _showEditTaskSheet(int index) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: _surface2,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (ctx) => _AddTaskSheet(
+        initialTask: _tasks[index],
+        onAdd: (task) => setState(() => _tasks[index] = task),
+      ),
+    );
+  }
+
   // ── Submit ───────────────────────────────────────────────────────────
 
   Future<void> _submit() async {
@@ -185,7 +199,8 @@ class _CreateActivityPageState extends State<CreateActivityPage> {
                       )
                     else
                       ..._tasks.asMap().entries.map((e) => _TaskRow(
-                            name: e.value.name,
+                            task: e.value,
+                            onEdit: () => _showEditTaskSheet(e.key),
                             onRemove: () => _removeTask(e.key),
                           )),
                     const SizedBox(height: 8),
@@ -437,7 +452,9 @@ class _CreateActivityPageState extends State<CreateActivityPage> {
 
 class _AddTaskSheet extends StatefulWidget {
   final void Function(ActivityTask task) onAdd;
-  const _AddTaskSheet({required this.onAdd});
+  final ActivityTask? initialTask;
+
+  const _AddTaskSheet({required this.onAdd, this.initialTask});
 
   @override
   State<_AddTaskSheet> createState() => _AddTaskSheetState();
@@ -451,12 +468,27 @@ class _AddTaskSheetState extends State<_AddTaskSheet> {
   String _priority       = 'Medium';
   double _hours          = 5;
 
+  bool get _isEditing => widget.initialTask != null;
+
   static const _taskTypes = [
     'Backend', 'Frontend', 'Testing',
     'Database', 'Documentation', 'Management',
   ];
   static const _complexities = ['Low', 'Medium', 'High'];
   static const _priorities   = ['Low', 'Medium', 'High'];
+
+  @override
+  void initState() {
+    super.initState();
+    final t = widget.initialTask;
+    if (t != null) {
+      _nameCtrl.text   = t.name;
+      _taskType        = t.taskType.isNotEmpty ? t.taskType : 'Backend';
+      _taskComplexity  = t.taskComplexity.isNotEmpty ? t.taskComplexity : 'Medium';
+      _priority        = t.priority.isNotEmpty ? t.priority : 'Medium';
+      _hours           = t.estimatedHours.toDouble().clamp(1, 100);
+    }
+  }
 
   @override
   void dispose() {
@@ -496,7 +528,7 @@ class _AddTaskSheetState extends State<_AddTaskSheet> {
               ),
             ),
             const SizedBox(height: 20),
-            Text('Nueva tarea',
+            Text(_isEditing ? 'Editar tarea' : 'Nueva tarea',
                 style: GoogleFonts.hankenGrotesk(
                     fontSize: 17, fontWeight: FontWeight.w700, color: _text)),
             const SizedBox(height: 14),
@@ -630,7 +662,7 @@ class _AddTaskSheetState extends State<_AddTaskSheet> {
                       borderRadius: BorderRadius.circular(999)),
                   elevation: 0,
                 ),
-                child: Text('Añadir tarea',
+                child: Text(_isEditing ? 'Guardar cambios' : 'Añadir tarea',
                     style: GoogleFonts.hankenGrotesk(
                         fontSize: 14, fontWeight: FontWeight.w700)),
               ),
@@ -702,10 +734,15 @@ class _DropRow extends StatelessWidget {
 // ── Task row ───────────────────────────────────────────────────────────
 
 class _TaskRow extends StatelessWidget {
-  final String name;
+  final ActivityTask task;
+  final VoidCallback onEdit;
   final VoidCallback onRemove;
 
-  const _TaskRow({required this.name, required this.onRemove});
+  const _TaskRow({
+    required this.task,
+    required this.onEdit,
+    required this.onRemove,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -713,34 +750,50 @@ class _TaskRow extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
       decoration: BoxDecoration(
-        color: const Color(0xFFFBFAF4),
+        color: _surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE7E2D5)),
+        border: Border.all(color: _border),
       ),
       child: Row(
         children: [
           Container(
             width: 28, height: 28,
             decoration: BoxDecoration(
-              color: const Color(0xFFF0EDE2),
+              color: _surfaceInset,
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: const Color(0xFFE7E2D5)),
+              border: Border.all(color: _border),
             ),
-            child: const Icon(Icons.check_rounded,
-                size: 16, color: Color(0xFF9A978C)),
+            child: const Icon(Icons.check_rounded, size: 16, color: _text3),
           ),
           const SizedBox(width: 12),
           Expanded(
-            child: Text(name,
-                style: GoogleFonts.hankenGrotesk(
-                  fontSize: 14, fontWeight: FontWeight.w600,
-                  color: const Color(0xFF21201B),
-                )),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(task.name,
+                    style: GoogleFonts.hankenGrotesk(
+                        fontSize: 14, fontWeight: FontWeight.w600, color: _text)),
+                if (task.taskType.isNotEmpty)
+                  Text('${task.taskType} · ${task.estimatedHours}h',
+                      style: GoogleFonts.hankenGrotesk(
+                          fontSize: 12, color: _text3)),
+              ],
+            ),
           ),
           GestureDetector(
+            onTap: onEdit,
+            child: const Padding(
+              padding: EdgeInsets.all(4),
+              child: Icon(Icons.edit_outlined, size: 18, color: _text3),
+            ),
+          ),
+          const SizedBox(width: 8),
+          GestureDetector(
             onTap: onRemove,
-            child: const Icon(Icons.close_rounded,
-                size: 18, color: Color(0xFF9A978C)),
+            child: const Padding(
+              padding: EdgeInsets.all(4),
+              child: Icon(Icons.close_rounded, size: 18, color: _text3),
+            ),
           ),
         ],
       ),

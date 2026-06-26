@@ -102,8 +102,10 @@ class _HomePageState extends State<HomePage> {
               key: _scaffoldKey,
               backgroundColor: _bg,
               drawer: _buildDrawer(name, initials),
-              // ── Body: fixed layout, no scroll ──────────────────────────────
-              body: Column(
+              // ── Body: SafeArea(top:false) respeta barra inferior del sistema ─
+              body: SafeArea(
+                top: false,
+                child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   // AppBar
@@ -121,7 +123,7 @@ class _HomePageState extends State<HomePage> {
                   // Progress card
                   Padding(
                     padding:
-                        const EdgeInsets.fromLTRB(20, 24, 20, 0),
+                        const EdgeInsets.fromLTRB(20, 16, 20, 0),
                     child: _ProgressCard(
                       progress: progress,
                       completedTasks: completedTasks,
@@ -130,7 +132,7 @@ class _HomePageState extends State<HomePage> {
                     ),
                   ),
 
-                  const SizedBox(height: 14),
+                  const SizedBox(height: 10),
 
                   // Stat cards
                   Padding(
@@ -162,7 +164,7 @@ class _HomePageState extends State<HomePage> {
                     ),
                   ),
 
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 16),
 
                   // Section title
                   Padding(
@@ -180,48 +182,53 @@ class _HomePageState extends State<HomePage> {
 
                   const SizedBox(height: 12),
 
-                  // Quick cards
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
-                    child: SizedBox(
-                      height: 140,
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Expanded(
-                            child: _QuickCard(
-                              icon: Icons.task_alt_rounded,
-                              iconBg: const Color(0xFFDDE8F5),
-                              iconColor: const Color(0xFF4A7FB5),
-                              label: 'Mis actividades',
-                              onTap: () => _go(const ActivitiesListPage()),
-                            ),
+                  // Quick cards — Expanded ocupa el espacio restante sin overflow
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+                      child: LayoutBuilder(
+                        builder: (_, c) => SizedBox(
+                          height: c.maxHeight,
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Expanded(
+                                child: _QuickCard(
+                                  icon: Icons.task_alt_rounded,
+                                  iconBg: const Color(0xFFDDE8F5),
+                                  iconColor: const Color(0xFF4A7FB5),
+                                  label: 'Mis actividades',
+                                  onTap: () => _go(const ActivitiesListPage()),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: _QuickCard(
+                                  icon: Icons.add_rounded,
+                                  iconBg: const Color(0xFFFAE7E2),
+                                  iconColor: _red,
+                                  label: 'Crear actividad',
+                                  onTap: () => _go(const CreateActivityPage()),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: _QuickCard(
+                                  icon: Icons.chat_bubble_outline_rounded,
+                                  iconBg: const Color(0xFFEDE8DC),
+                                  iconColor: const Color(0xFF8B7355),
+                                  label: 'Asistente IA',
+                                  onTap: () => _go(const ChatboxPage()),
+                                ),
+                              ),
+                            ],
                           ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: _QuickCard(
-                              icon: Icons.add_rounded,
-                              iconBg: const Color(0xFFFAE7E2),
-                              iconColor: _red,
-                              label: 'Crear actividad',
-                              onTap: () => _go(const CreateActivityPage()),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: _QuickCard(
-                              icon: Icons.chat_bubble_outline_rounded,
-                              iconBg: const Color(0xFFEDE8DC),
-                              iconColor: const Color(0xFF8B7355),
-                              label: 'Asistente IA',
-                              onTap: () => _go(const ChatboxPage()),
-                            ),
-                          ),
-                        ],
+                        ),
                       ),
                     ),
                   ),
                 ],
+              ),
               ),
             );
               },

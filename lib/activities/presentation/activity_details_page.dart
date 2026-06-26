@@ -506,7 +506,9 @@ class _ActivityDetailsPageState extends State<ActivityDetailsPage> {
 
     return Scaffold(
       backgroundColor: _bg,
-      body: Column(
+      body: SafeArea(
+        top: false,
+        child: Column(
         children: [
           _buildHeader(),
           // Segmented control
@@ -527,6 +529,7 @@ class _ActivityDetailsPageState extends State<ActivityDetailsPage> {
             ),
           ),
         ],
+        ),
       ),
       bottomNavigationBar: showFinalize ? _buildFinalizeBar() : null,
     );

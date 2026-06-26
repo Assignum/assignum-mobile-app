@@ -194,7 +194,9 @@ class _ProfilePageState extends State<ProfilePage> {
 
     return Scaffold(
       backgroundColor: _bg,
-      body: Column(
+      body: SafeArea(
+        top: false,
+        child: Column(
         children: [
           // Header
           _ProfileAppBar(
@@ -397,6 +399,7 @@ class _ProfilePageState extends State<ProfilePage> {
             ),
           ),
         ],
+        ),
       ),
     );
   }
