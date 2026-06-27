@@ -411,7 +411,8 @@ class _ActivityDetailsPageState extends State<ActivityDetailsPage> {
     }
 
     return ListView.builder(
-      padding: EdgeInsets.zero,
+      padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).padding.bottom + 16),
       itemCount: tasks.length,
       itemBuilder: (ctx, i) {
         final task = tasks[i];
@@ -525,7 +526,11 @@ class _ActivityDetailsPageState extends State<ActivityDetailsPage> {
               padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
               child: _showTasks
                   ? _buildTasksList()
-                  : SingleChildScrollView(child: _buildMembersList()),
+                  : SingleChildScrollView(
+                      padding: EdgeInsets.only(
+                          bottom: MediaQuery.of(context).padding.bottom + 16),
+                      child: _buildMembersList(),
+                    ),
             ),
           ),
         ],

@@ -507,7 +507,9 @@ class _TaskDetailsPageState extends State<TaskDetailsPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: _bg,
-      body: Column(
+      body: SafeArea(
+        top: false,
+        child: Column(
         children: [
           _buildHeader(),
           Expanded(
@@ -530,6 +532,7 @@ class _TaskDetailsPageState extends State<TaskDetailsPage> {
           ),
           _buildBottomBar(),
         ],
+        ),
       ),
     );
   }

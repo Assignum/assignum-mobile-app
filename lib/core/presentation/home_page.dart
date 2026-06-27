@@ -341,7 +341,7 @@ class _HomePageState extends State<HomePage> {
               await Auth().signOut();
             },
           ),
-          const SizedBox(height: 28),
+          SafeArea(top: false, child: const SizedBox(height: 8)),
         ],
       ),
     );
@@ -554,8 +554,10 @@ class _ProgressCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final pct = (progress * 100).round();
+    final sw = MediaQuery.of(context).size.width;
+    final donutSize = (sw * 0.32).clamp(90.0, 130.0);
     return Container(
-      padding: const EdgeInsets.fromLTRB(24, 28, 24, 24),
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
       decoration: BoxDecoration(
         color: _surface,
         borderRadius: BorderRadius.circular(26),
@@ -570,17 +572,17 @@ class _ProgressCard extends StatelessWidget {
       ),
       child: Column(
         children: [
-          // Donut grande centrado
+          // Donut proporcional al ancho de pantalla
           SizedBox(
-            width: 140,
-            height: 140,
+            width: donutSize,
+            height: donutSize,
             child: CustomPaint(
               painter: _DonutPainter(progress: progress),
               child: Center(
                 child: Text(
                   '$pct%',
                   style: GoogleFonts.hankenGrotesk(
-                    fontSize: 30,
+                    fontSize: donutSize * 0.22,
                     fontWeight: FontWeight.w800,
                     color: _red,
                   ),
@@ -588,7 +590,7 @@ class _ProgressCard extends StatelessWidget {
               ),
             ),
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 14),
           // Headline
           Text(
             _headline,

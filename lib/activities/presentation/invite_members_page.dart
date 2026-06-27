@@ -190,7 +190,9 @@ class _InviteMembersPageState extends State<InviteMembersPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: _bg,
-      body: Column(
+      body: SafeArea(
+        top: false,
+        child: Column(
         children: [
           _buildHeader(),
           Expanded(
@@ -261,6 +263,7 @@ class _InviteMembersPageState extends State<InviteMembersPage> {
           ),
           _buildBottomBar(),
         ],
+        ),
       ),
     );
   }

@@ -124,7 +124,9 @@ class _ChatboxPageState extends State<ChatboxPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: _bg,
-      body: Column(
+      body: SafeArea(
+        top: false,
+        child: Column(
         children: [
           _buildHeader(),
           // Messages
@@ -187,6 +189,7 @@ class _ChatboxPageState extends State<ChatboxPage> {
           // Input bar
           _buildInputBar(),
         ],
+        ),
       ),
     );
   }

@@ -67,7 +67,9 @@ class _NotificationsPageState extends State<NotificationsPage> {
     final count = _invitations.length;
     return Scaffold(
       backgroundColor: _bg,
-      body: Column(
+      body: SafeArea(
+        top: false,
+        child: Column(
         children: [
           _buildHeader(count),
           Expanded(
@@ -78,6 +80,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
                     : _buildList(),
           ),
         ],
+        ),
       ),
     );
   }
