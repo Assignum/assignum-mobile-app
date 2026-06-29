@@ -224,6 +224,24 @@ class _ActivityDetailsPageState extends State<ActivityDetailsPage> {
     );
   }
 
+  Future<void> _showAssignAnimation() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => _AssignAnimationDialog(
+        assignFuture: ActivityService().assignTasks(_currentActivity.id),
+      ),
+    );
+    if (!mounted) return;
+    if (ok == true) {
+      _showDivideSuccessDialog();
+    } else if (ok == false) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Error al asignar tareas')),
+      );
+    }
+  }
+
   void _showDivideSuccessDialog() {
     showDialog(
       context: context,
@@ -368,18 +386,7 @@ class _ActivityDetailsPageState extends State<ActivityDetailsPage> {
             child: ElevatedButton(
               onPressed: _currentActivity.tasks.isEmpty
                   ? null
-                  : () async {
-                      try {
-                        await ActivityService().assignTasks(_currentActivity.id);
-                        _showDivideSuccessDialog();
-                      } on ApiException catch (e) {
-                        if (mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text(e.message), backgroundColor: _primary),
-                          );
-                        }
-                      }
-                    },
+                  : () => _showAssignAnimation(),
               style: ElevatedButton.styleFrom(
                 backgroundColor: _primary,
                 foregroundColor: Colors.white,
@@ -871,4 +878,234 @@ class _Pill extends StatelessWidget {
             style: GoogleFonts.hankenGrotesk(
                 fontSize: 11.5, fontWeight: FontWeight.w600, color: fg)),
       );
+}
+
+// ── Assign animation dialog ────────────────────────────────────────────────────
+
+class _AssignAnimationDialog extends StatefulWidget {
+  final Future<void> assignFuture;
+  const _AssignAnimationDialog({required this.assignFuture});
+
+  @override
+  State<_AssignAnimationDialog> createState() => _AssignAnimationDialogState();
+}
+
+class _AssignAnimationDialogState extends State<_AssignAnimationDialog>
+    with SingleTickerProviderStateMixin {
+
+  static const _steps = [
+    ('Recopilando datos de los estudiantes...', Icons.people_outline_rounded),
+    ('Analizando habilidades del equipo...', Icons.psychology_outlined),
+    ('Identificando al mejor candidato...', Icons.manage_search_rounded),
+    ('Asignando de manera equitativa...', Icons.auto_awesome_outlined),
+    ('¡Todo listo!', Icons.check_circle_outline_rounded),
+  ];
+
+  int _step = 0;
+  bool _apiDone = false;
+  late AnimationController _spinCtrl;
+  Timer? _stepTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _spinCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 2),
+    )..repeat();
+
+    _startSteps();
+    widget.assignFuture.then((_) {
+      _apiDone = true;
+      _tryFinish();
+    }).catchError((_) {
+      if (mounted) Navigator.of(context).pop(false);
+    });
+  }
+
+  void _startSteps() {
+    _stepTimer = Timer.periodic(const Duration(milliseconds: 1300), (t) {
+      if (!mounted) { t.cancel(); return; }
+      // Pausar en el último paso animado hasta que la API termine
+      if (_step >= _steps.length - 2) {
+        t.cancel();
+        _tryFinish();
+        return;
+      }
+      setState(() => _step++);
+    });
+  }
+
+  void _tryFinish() {
+    if (!_apiDone || !mounted) return;
+    setState(() => _step = _steps.length - 1);
+    Future.delayed(const Duration(milliseconds: 900), () {
+      if (mounted) Navigator.of(context).pop(true);
+    });
+  }
+
+  @override
+  void dispose() {
+    _stepTimer?.cancel();
+    _spinCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDone = _step == _steps.length - 1;
+    final (label, icon) = _steps[_step];
+
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      elevation: 0,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(28, 36, 28, 32),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFBFAF4),
+          borderRadius: BorderRadius.circular(28),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF3C321E).withValues(alpha: 0.12),
+              blurRadius: 32, offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Spinner / checkmark
+            SizedBox(
+              width: 80, height: 80,
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 400),
+                child: isDone
+                    ? Container(
+                        key: const ValueKey('done'),
+                        width: 80, height: 80,
+                        decoration: const BoxDecoration(
+                          color: Color(0xFFDDF0E4),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.check_rounded,
+                            color: Color(0xFF4A8C6A), size: 40),
+                      )
+                    : Stack(
+                        key: const ValueKey('spin'),
+                        alignment: Alignment.center,
+                        children: [
+                          RotationTransition(
+                            turns: _spinCtrl,
+                            child: CustomPaint(
+                              size: const Size(80, 80),
+                              painter: _ArcPainter(),
+                            ),
+                          ),
+                          Container(
+                            width: 56, height: 56,
+                            decoration: const BoxDecoration(
+                              color: Color(0xFFFAE7E2),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(icon, color: _primary, size: 26),
+                          ),
+                        ],
+                      ),
+              ),
+            ),
+            const SizedBox(height: 28),
+
+            // Steps completados
+            ...List.generate(_step, (i) => Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Row(
+                children: [
+                  const Icon(Icons.check_rounded,
+                      size: 16, color: Color(0xFF4A8C6A)),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      _steps[i].$1,
+                      style: GoogleFonts.hankenGrotesk(
+                        fontSize: 13,
+                        color: const Color(0xFF9A978C),
+                        decoration: TextDecoration.lineThrough,
+                        decorationColor: const Color(0xFF9A978C),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            )),
+
+            // Paso actual
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 350),
+              transitionBuilder: (child, anim) => FadeTransition(
+                opacity: anim,
+                child: SlideTransition(
+                  position: Tween<Offset>(
+                    begin: const Offset(0, 0.15),
+                    end: Offset.zero,
+                  ).animate(anim),
+                  child: child,
+                ),
+              ),
+              child: Row(
+                key: ValueKey(_step),
+                children: [
+                  if (!isDone) ...[
+                    SizedBox(
+                      width: 16, height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: _primary,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                  ] else ...[
+                    const Icon(Icons.check_rounded,
+                        size: 16, color: Color(0xFF4A8C6A)),
+                    const SizedBox(width: 8),
+                  ],
+                  Expanded(
+                    child: Text(
+                      label,
+                      style: GoogleFonts.hankenGrotesk(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: isDone
+                            ? const Color(0xFF4A8C6A)
+                            : const Color(0xFF21201B),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ArcPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = Rect.fromCircle(
+        center: Offset(size.width / 2, size.height / 2),
+        radius: size.width / 2 - 4);
+    final paint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 4
+      ..strokeCap = StrokeCap.round
+      ..shader = const SweepGradient(
+        colors: [Color(0x00DC2F26), Color(0xFFDC2F26)],
+      ).createShader(rect);
+    canvas.drawArc(rect, 0, 5.5, false, paint);
+  }
+
+  @override
+  bool shouldRepaint(_ArcPainter _) => false;
 }
