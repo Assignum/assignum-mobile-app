@@ -1,6 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:assignum/core/infrastructure/api_client.dart';
 import 'package:assignum/core/infrastructure/auth_session.dart';
+import 'package:assignum/core/infrastructure/notification_service.dart';
 
 class Auth {
   Future<void> signInWithEmailAndPassword({
@@ -20,11 +21,14 @@ class Auth {
       password: password,
     );
 
+    final uid    = data['uid']   as String;
+    final uEmail = data['email'] as String;
     await AuthSession().setSession(
       idToken: data['idToken'] as String,
-      uid: data['uid'] as String,
-      email: data['email'] as String,
+      uid: uid,
+      email: uEmail,
     );
+    NotificationService.saveToken(uid, uEmail);
   }
 
   Future<void> createUserWithEmailAndPassword({
@@ -42,11 +46,14 @@ class Auth {
       password: password,
     );
 
+    final uid    = data['uid']   as String;
+    final uEmail = data['email'] as String;
     await AuthSession().setSession(
       idToken: data['idToken'] as String,
-      uid: data['uid'] as String,
-      email: data['email'] as String,
+      uid: uid,
+      email: uEmail,
     );
+    NotificationService.saveToken(uid, uEmail);
   }
 
   Future<void> sendPasswordResetEmail({required String email}) async {
@@ -54,6 +61,8 @@ class Auth {
   }
 
   Future<void> signOut() async {
+    final uid = AuthSession().uid;
+    if (uid != null) await NotificationService.deleteToken(uid);
     try {
       await ApiClient.post('/api/auth/logout');
     } catch (_) {}
