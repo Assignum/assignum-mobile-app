@@ -1,5 +1,7 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:assignum/activities/domain/activity.dart';
 import 'package:assignum/activities/domain/activity_task.dart';
 import 'package:assignum/activities/infrastructure/activity_service.dart';
@@ -33,11 +35,18 @@ class MemberTaskPage extends StatefulWidget {
   State<MemberTaskPage> createState() => _MemberTaskPageState();
 }
 
+class _PendingFile {
+  final File file;
+  final String name;
+  _PendingFile({required this.file, required this.name});
+}
+
 class _MemberTaskPageState extends State<MemberTaskPage> {
   late String _status;
   final _commentsCtrl = TextEditingController();
-  late List<String> _files;
+  late List<String> _files;          // URLs ya guardadas en Firestore
   late List<String> _links;
+  final List<_PendingFile> _pending = []; // Archivos locales sin subir aún
   bool _saving = false;
   late bool _isLeader;
 
@@ -91,6 +100,18 @@ class _MemberTaskPageState extends State<MemberTaskPage> {
   Future<void> _saveTask() async {
     setState(() => _saving = true);
     try {
+      // Subir archivos pendientes a Cloudinary
+      for (final p in _pending) {
+        final url = await ActivityService().uploadTaskFile(
+          widget.activity.id,
+          widget.task.id,
+          p.file,
+          p.name,
+        );
+        _files.add(url);
+      }
+      _pending.clear();
+
       await ActivityService().updateTaskDirectly(
         widget.activity.id,
         widget.task.id,
@@ -165,6 +186,21 @@ class _MemberTaskPageState extends State<MemberTaskPage> {
     );
   }
 
+  // ── File upload ──────────────────────────────────────────────────────
+
+  Future<void> _pickAndUploadFile() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.any,
+      withData: false,
+    );
+    if (result == null || result.files.isEmpty) return;
+    final picked = result.files.first;
+    if (picked.path == null) return;
+    // Solo se guarda localmente — la subida ocurre al presionar Guardar
+    setState(() => _pending.add(
+        _PendingFile(file: File(picked.path!), name: picked.name)));
+  }
+
   // ── Add attachment sheet ─────────────────────────────────────────────
 
   void _showAddAttachment() {
@@ -175,9 +211,15 @@ class _MemberTaskPageState extends State<MemberTaskPage> {
       shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
       builder: (ctx) => _AddAttachmentSheet(
-        onAdd: (isLink, value) => setState(() {
-          if (isLink) { _links.add(value); } else { _files.add(value); }
-        }),
+        onPickFile: () {
+          // Cerrar el sheet primero y esperar a que termine la animación
+          // antes de abrir el picker del sistema (evita timing issue en Android)
+          Navigator.pop(ctx);
+          Future.delayed(const Duration(milliseconds: 350), () {
+            if (mounted) _pickAndUploadFile();
+          });
+        },
+        onAddLink: (url) => setState(() => _links.add(url)),
       ),
     );
   }
@@ -299,35 +341,35 @@ class _MemberTaskPageState extends State<MemberTaskPage> {
   }
 
   Widget _buildAttachments() {
-    final hasItems = _files.isNotEmpty || _links.isNotEmpty;
+    final hasItems = _files.isNotEmpty || _links.isNotEmpty || _pending.isNotEmpty;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Files
+        // Archivos ya guardados (URLs de Cloudinary)
         ..._files.asMap().entries.map((e) => _AttachmentRow(
-              icon: Icons.description_outlined,
-              iconBg: _primaryTint,
-              iconColor: _primary,
-              title: e.value,
-              subtitle: e.value.contains('.')
-                  ? e.value.split('.').last.toUpperCase()
-                  : 'Archivo',
+              url: e.value,
+              isImage: ActivityService.isImageUrl(e.value),
+              title: ActivityService.filenameFromUrl(e.value),
               onRemove: _isReadOnly
                   ? null
                   : () => setState(() => _files.removeAt(e.key)),
             )),
         // Links
         ..._links.asMap().entries.map((e) => _AttachmentRow(
-              icon: Icons.link_rounded,
-              iconBg: const Color(0xFFE4EAF1),
-              iconColor: const Color(0xFF5C7B97),
+              url: e.value,
+              isImage: false,
               title: e.value
                   .replaceFirst('https://', '')
                   .replaceFirst('http://', ''),
-              subtitle: 'Enlace',
+              isLink: true,
               onRemove: _isReadOnly
                   ? null
                   : () => setState(() => _links.removeAt(e.key)),
+            )),
+        // Archivos pendientes (locales, aún no subidos)
+        ..._pending.asMap().entries.map((e) => _PendingFileRow(
+              pending: e.value,
+              onRemove: () => setState(() => _pending.removeAt(e.key)),
             )),
         // Empty hint
         if (!hasItems && !_isReadOnly)
@@ -339,8 +381,7 @@ class _MemberTaskPageState extends State<MemberTaskPage> {
             ),
             child: Center(
               child: Text('Sin archivos ni enlaces adjuntos',
-                  style: GoogleFonts.hankenGrotesk(
-                      fontSize: 13, color: _text3)),
+                  style: GoogleFonts.hankenGrotesk(fontSize: 13, color: _text3)),
             ),
           ),
         if (!_isReadOnly) ...[
@@ -357,14 +398,11 @@ class _MemberTaskPageState extends State<MemberTaskPage> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(Icons.attach_file_rounded,
-                      size: 18, color: _text2),
+                  const Icon(Icons.attach_file_rounded, size: 18, color: _text2),
                   const SizedBox(width: 8),
                   Text('Añadir archivo o enlace',
                       style: GoogleFonts.hankenGrotesk(
-                        fontSize: 14, fontWeight: FontWeight.w600,
-                        color: _text2,
-                      )),
+                          fontSize: 14, fontWeight: FontWeight.w600, color: _text2)),
                 ],
               ),
             ),
@@ -567,81 +605,226 @@ class _StatusSelector extends StatelessWidget {
   }
 }
 
+// ── Pending file row (local, aún no subido) ───────────────────────────
+
+class _PendingFileRow extends StatelessWidget {
+  final _PendingFile pending;
+  final VoidCallback onRemove;
+
+  const _PendingFileRow({required this.pending, required this.onRemove});
+
+  bool get _isImage {
+    final ext = pending.name.toLowerCase().split('.').last;
+    return ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'].contains(ext);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      decoration: BoxDecoration(
+        color: _surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFDC2F26).withValues(alpha: 0.35)),
+      ),
+      child: Column(
+        children: [
+          // Preview local para imágenes
+          if (_isImage)
+            ClipRRect(
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(13)),
+              child: Image.file(
+                pending.file,
+                height: 120,
+                width: double.infinity,
+                fit: BoxFit.cover,
+              ),
+            ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+            child: Row(
+              children: [
+                Container(
+                  width: 38, height: 38,
+                  decoration: BoxDecoration(
+                    color: _primaryTint,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.upload_outlined, color: _primary, size: 20),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(pending.name,
+                          style: GoogleFonts.hankenGrotesk(
+                              fontSize: 13.5, fontWeight: FontWeight.w600,
+                              color: _text),
+                          overflow: TextOverflow.ellipsis),
+                      Text('Pendiente de guardar',
+                          style: GoogleFonts.hankenGrotesk(
+                              fontSize: 12, color: _primary)),
+                    ],
+                  ),
+                ),
+                GestureDetector(
+                  onTap: onRemove,
+                  child: const Padding(
+                    padding: EdgeInsets.all(4),
+                    child: Icon(Icons.close_rounded, size: 18, color: _text3),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 // ── Attachment row ─────────────────────────────────────────────────────
 
 class _AttachmentRow extends StatelessWidget {
-  final IconData icon;
-  final Color iconBg;
-  final Color iconColor;
+  final String url;
   final String title;
-  final String subtitle;
+  final bool isImage;
+  final bool isLink;
   final VoidCallback? onRemove;
 
   const _AttachmentRow({
-    required this.icon,
-    required this.iconBg,
-    required this.iconColor,
+    required this.url,
     required this.title,
-    required this.subtitle,
+    required this.isImage,
+    this.isLink = false,
     required this.onRemove,
   });
 
   @override
-  Widget build(BuildContext context) => Container(
-        margin: const EdgeInsets.only(bottom: 10),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        decoration: BoxDecoration(
-          color: _surface,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: _border),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 40, height: 40,
-              decoration: BoxDecoration(
-                  color: iconBg, borderRadius: BorderRadius.circular(10)),
-              child: Icon(icon, color: iconColor, size: 20),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(title,
-                      style: GoogleFonts.hankenGrotesk(
-                        fontSize: 13.5, fontWeight: FontWeight.w600, color: _text),
-                      overflow: TextOverflow.ellipsis),
-                  Text(subtitle,
-                      style: GoogleFonts.hankenGrotesk(
-                          fontSize: 12, color: _text3)),
-                ],
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      decoration: BoxDecoration(
+        color: _surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: _border),
+      ),
+      child: Column(
+        children: [
+          // Si es imagen, muestra la miniatura arriba
+          if (isImage)
+            ClipRRect(
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(13)),
+              child: Image.network(
+                url,
+                height: 140,
+                width: double.infinity,
+                fit: BoxFit.cover,
+                loadingBuilder: (_, child, progress) => progress == null
+                    ? child
+                    : Container(
+                        height: 140,
+                        color: _surfaceInset,
+                        child: const Center(
+                          child: CircularProgressIndicator(
+                              color: _primary, strokeWidth: 2),
+                        ),
+                      ),
+                errorBuilder: (_, __, ___) => Container(
+                  height: 80,
+                  color: _surfaceInset,
+                  child: const Center(
+                    child: Icon(Icons.broken_image_outlined,
+                        color: _text3, size: 32),
+                  ),
+                ),
               ),
             ),
-            if (onRemove != null)
-              GestureDetector(
-                onTap: onRemove,
-                child: const Icon(Icons.close_rounded, size: 18, color: _text3),
-              )
-            else
-              const Icon(Icons.chevron_right_rounded, size: 20, color: _text3),
-          ],
-        ),
-      );
+          // Fila inferior con nombre y botón de eliminar
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            child: Row(
+              children: [
+                Container(
+                  width: 38, height: 38,
+                  decoration: BoxDecoration(
+                    color: isLink
+                        ? const Color(0xFFE4EAF1)
+                        : isImage
+                            ? const Color(0xFFDDF0E4)
+                            : _primaryTint,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(
+                    isLink
+                        ? Icons.link_rounded
+                        : isImage
+                            ? Icons.image_outlined
+                            : Icons.description_outlined,
+                    color: isLink
+                        ? const Color(0xFF5C7B97)
+                        : isImage
+                            ? const Color(0xFF4A8C6A)
+                            : _primary,
+                    size: 20,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(title,
+                          style: GoogleFonts.hankenGrotesk(
+                              fontSize: 13.5,
+                              fontWeight: FontWeight.w600,
+                              color: _text),
+                          overflow: TextOverflow.ellipsis),
+                      Text(
+                        isLink ? 'Enlace' : isImage ? 'Imagen' : 'Archivo',
+                        style: GoogleFonts.hankenGrotesk(
+                            fontSize: 12, color: _text3),
+                      ),
+                    ],
+                  ),
+                ),
+                if (onRemove != null)
+                  GestureDetector(
+                    onTap: onRemove,
+                    child: const Padding(
+                      padding: EdgeInsets.all(4),
+                      child: Icon(Icons.close_rounded,
+                          size: 18, color: _text3),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 // ── Add attachment bottom sheet ────────────────────────────────────────
+// Muestra dos opciones: subir archivo (picker) o añadir enlace (texto).
 
 class _AddAttachmentSheet extends StatefulWidget {
-  final void Function(bool isLink, String value) onAdd;
-  const _AddAttachmentSheet({required this.onAdd});
+  final VoidCallback onPickFile;
+  final void Function(String url) onAddLink;
+
+  const _AddAttachmentSheet({
+    required this.onPickFile,
+    required this.onAddLink,
+  });
 
   @override
   State<_AddAttachmentSheet> createState() => _AddAttachmentSheetState();
 }
 
 class _AddAttachmentSheetState extends State<_AddAttachmentSheet> {
-  bool _isLink = false;
+  bool _showLinkInput = false;
   final _ctrl = TextEditingController();
 
   @override
@@ -654,7 +837,9 @@ class _AddAttachmentSheetState extends State<_AddAttachmentSheet> {
   Widget build(BuildContext context) {
     return Padding(
       padding: EdgeInsets.fromLTRB(
-          20, 20, 20, MediaQuery.of(context).viewInsets.bottom + 20),
+          20, 20, 20,
+          MediaQuery.of(context).viewInsets.bottom +
+              MediaQuery.of(context).padding.bottom + 20),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -672,103 +857,128 @@ class _AddAttachmentSheetState extends State<_AddAttachmentSheet> {
               style: GoogleFonts.hankenGrotesk(
                   fontSize: 17, fontWeight: FontWeight.w700, color: _text)),
           const SizedBox(height: 16),
-          // Toggle Archivo / Enlace
-          Container(
-            padding: const EdgeInsets.all(4),
-            decoration: BoxDecoration(
-              color: _surfaceInset, borderRadius: BorderRadius.circular(999)),
-            child: Row(
-              children: [
-                _SheetTab(label: 'Archivo', active: !_isLink,
-                    onTap: () => setState(() => _isLink = false)),
-                _SheetTab(label: 'Enlace', active: _isLink,
-                    onTap: () => setState(() => _isLink = true)),
-              ],
+
+          if (!_showLinkInput) ...[
+            // Opción 1: subir archivo
+            _OptionTile(
+              icon: Icons.upload_file_rounded,
+              iconBg: const Color(0xFFFAE7E2),
+              iconColor: _primary,
+              title: 'Subir archivo',
+              subtitle: 'PDF, imagen, Word…',
+              onTap: widget.onPickFile,
             ),
-          ),
-          const SizedBox(height: 14),
-          // Input
-          Container(
-            decoration: BoxDecoration(
-              color: _surface,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: _border),
+            const SizedBox(height: 10),
+            // Opción 2: enlace
+            _OptionTile(
+              icon: Icons.link_rounded,
+              iconBg: const Color(0xFFE4EAF1),
+              iconColor: const Color(0xFF5C7B97),
+              title: 'Añadir enlace',
+              subtitle: 'Google Drive, YouTube, etc.',
+              onTap: () => setState(() => _showLinkInput = true),
             ),
-            child: TextField(
-              controller: _ctrl,
-              autofocus: true,
-              style: GoogleFonts.hankenGrotesk(fontSize: 14, color: _text),
-              decoration: InputDecoration(
-                border: InputBorder.none,
-                contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 16, vertical: 14),
-                hintText: _isLink
-                    ? 'https://...'
-                    : 'nombre-archivo.pdf',
-                hintStyle: GoogleFonts.hankenGrotesk(
-                    fontSize: 14, color: _text3),
+          ] else ...[
+            // Input enlace
+            Container(
+              decoration: BoxDecoration(
+                color: _surface,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: _border),
+              ),
+              child: TextField(
+                controller: _ctrl,
+                autofocus: true,
+                keyboardType: TextInputType.url,
+                style: GoogleFonts.hankenGrotesk(fontSize: 14, color: _text),
+                decoration: InputDecoration(
+                  border: InputBorder.none,
+                  contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16, vertical: 14),
+                  hintText: 'https://...',
+                  hintStyle: GoogleFonts.hankenGrotesk(
+                      fontSize: 14, color: _text3),
+                ),
               ),
             ),
-          ),
-          const SizedBox(height: 14),
-          SizedBox(
-            width: double.infinity, height: 50,
-            child: ElevatedButton(
-              onPressed: () {
-                final val = _ctrl.text.trim();
-                if (val.isNotEmpty) {
-                  widget.onAdd(_isLink, val);
-                  Navigator.pop(context);
-                }
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: _primary,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(999)),
-                elevation: 0,
+            const SizedBox(height: 14),
+            SizedBox(
+              width: double.infinity, height: 50,
+              child: ElevatedButton(
+                onPressed: () {
+                  final val = _ctrl.text.trim();
+                  if (val.isNotEmpty) {
+                    widget.onAddLink(val);
+                    Navigator.pop(context);
+                  }
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _primary,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(999)),
+                  elevation: 0,
+                ),
+                child: Text('Añadir enlace',
+                    style: GoogleFonts.hankenGrotesk(
+                        fontSize: 14, fontWeight: FontWeight.w700)),
               ),
-              child: Text('Añadir',
-                  style: GoogleFonts.hankenGrotesk(
-                      fontSize: 14, fontWeight: FontWeight.w700)),
             ),
-          ),
+          ],
+          const SizedBox(height: 4),
         ],
       ),
     );
   }
 }
 
-class _SheetTab extends StatelessWidget {
-  final String label;
-  final bool active;
+class _OptionTile extends StatelessWidget {
+  final IconData icon;
+  final Color iconBg;
+  final Color iconColor;
+  final String title;
+  final String subtitle;
   final VoidCallback onTap;
-  const _SheetTab({required this.label, required this.active, required this.onTap});
+
+  const _OptionTile({
+    required this.icon, required this.iconBg, required this.iconColor,
+    required this.title, required this.subtitle, required this.onTap,
+  });
 
   @override
-  Widget build(BuildContext context) => Expanded(
-        child: GestureDetector(
-          onTap: onTap,
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 150),
-            padding: const EdgeInsets.symmetric(vertical: 9),
-            decoration: BoxDecoration(
-              color: active ? _surface2 : Colors.transparent,
-              borderRadius: BorderRadius.circular(999),
-              boxShadow: active
-                  ? [BoxShadow(
-                      color: const Color(0xFF3C321E).withValues(alpha: 0.07),
-                      blurRadius: 6, offset: const Offset(0, 2))]
-                  : null,
-            ),
-            alignment: Alignment.center,
-            child: Text(label,
-                style: GoogleFonts.hankenGrotesk(
-                  fontSize: 13,
-                  fontWeight: active ? FontWeight.w700 : FontWeight.w500,
-                  color: active ? _text : _text3,
-                )),
+  Widget build(BuildContext context) => GestureDetector(
+    onTap: onTap,
+    child: Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      decoration: BoxDecoration(
+        color: _surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: _border),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 44, height: 44,
+            decoration: BoxDecoration(color: iconBg,
+                borderRadius: BorderRadius.circular(12)),
+            child: Icon(icon, color: iconColor, size: 22),
           ),
-        ),
-      );
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: GoogleFonts.hankenGrotesk(
+                    fontSize: 14, fontWeight: FontWeight.w600, color: _text)),
+                Text(subtitle, style: GoogleFonts.hankenGrotesk(
+                    fontSize: 12, color: _text3)),
+              ],
+            ),
+          ),
+          const Icon(Icons.chevron_right_rounded, size: 18, color: _text3),
+        ],
+      ),
+    ),
+  );
 }
+

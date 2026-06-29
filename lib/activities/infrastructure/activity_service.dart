@@ -1,4 +1,7 @@
+import 'dart:io';
+import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:http/http.dart' as http;
 import 'package:assignum/core/infrastructure/api_client.dart';
 import 'package:assignum/core/infrastructure/auth_session.dart';
 import 'package:assignum/activities/domain/activity.dart';
@@ -254,5 +257,58 @@ class ActivityService {
       'pendingTasks': (data['pendingTasks'] as num?)?.toInt() ?? 0,
       'upcomingActivities': (data['upcomingActivities'] as num?)?.toInt() ?? 0,
     };
+  }
+
+  // ── File upload (Cloudinary) ──────────────────────────────────────────────────
+
+  // ⚠️  Reemplaza estos dos valores con los de tu cuenta Cloudinary:
+  static const _cloudinaryCloud  = 'dgcymtdbq';
+  static const _cloudinaryPreset = 'assignum_uploads';
+
+  /// Sube un archivo a Cloudinary y devuelve la URL segura de descarga.
+  /// Usa un upload preset sin firma (unsigned), sin necesidad de backend.
+  Future<String> uploadTaskFile(
+    String activityId,
+    String taskId,
+    File file,
+    String filename,
+  ) async {
+    final uri = Uri.parse(
+        'https://api.cloudinary.com/v1_1/$_cloudinaryCloud/auto/upload');
+
+    final request = http.MultipartRequest('POST', uri)
+      ..fields['upload_preset'] = _cloudinaryPreset
+      ..fields['folder'] = 'activities/$activityId/tasks/$taskId'
+      ..files.add(await http.MultipartFile.fromPath('file', file.path,
+          filename: filename));
+
+    final streamed = await request.send();
+    final body = await streamed.stream.bytesToString();
+
+    if (streamed.statusCode != 200) {
+      throw Exception('Cloudinary error ${streamed.statusCode}: $body');
+    }
+
+    final json = jsonDecode(body) as Map<String, dynamic>;
+    return json['secure_url'] as String;
+  }
+
+  // ── File helpers ──────────────────────────────────────────────────────────────
+
+  static bool isImageUrl(String url) {
+    // Cloudinary pone PDFs y docs también bajo /image/upload/ cuando resource_type=auto,
+    // por eso no podemos fiarnos del path — usamos la extensión del archivo.
+    final ext = url.toLowerCase().split('?').first.split('.').last;
+    return ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'].contains(ext);
+  }
+
+  static String filenameFromUrl(String url) {
+    try {
+      // Cloudinary: https://res.cloudinary.com/.../filename.ext
+      final path = Uri.parse(url).path;
+      return path.split('/').last.split('?').first;
+    } catch (_) {
+      return 'Archivo';
+    }
   }
 }

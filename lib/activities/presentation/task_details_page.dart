@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:assignum/activities/domain/activity.dart';
 import 'package:assignum/activities/domain/activity_task.dart';
 import 'package:assignum/activities/domain/auth_facade.dart';
@@ -358,18 +359,15 @@ class _TaskDetailsPageState extends State<TaskDetailsPage> {
             )),
         const SizedBox(height: 10),
         ...files.map((f) => _EntregableRow(
-              icon: Icons.description_outlined,
-              iconBg: const Color(0xFFFAE7E2),
-              iconColor: _primary,
-              title: f.trim(),
-              subtitle: _fileSubtitle(f.trim()),
+              url: f.trim(),
+              isImage: ActivityService.isImageUrl(f.trim()),
+              title: ActivityService.filenameFromUrl(f.trim()),
             )),
         ...links.map((l) => _EntregableRow(
-              icon: Icons.link_rounded,
-              iconBg: const Color(0xFFE4EAF1),
-              iconColor: const Color(0xFF5C7B97),
+              url: l.trim(),
+              isImage: false,
+              isLink: true,
               title: _shortenUrl(l.trim()),
-              subtitle: 'Enlace',
             )),
       ],
     );
@@ -489,11 +487,6 @@ class _TaskDetailsPageState extends State<TaskDetailsPage> {
 
   // ── Helpers para entregables ─────────────────────────────────────────
 
-  String _fileSubtitle(String filename) {
-    final ext = filename.contains('.') ? filename.split('.').last.toUpperCase() : 'Archivo';
-    return ext;
-  }
-
   String _shortenUrl(String url) {
     return url
         .replaceFirst('https://', '')
@@ -541,59 +534,147 @@ class _TaskDetailsPageState extends State<TaskDetailsPage> {
 // ── Entregable row widget ──────────────────────────────────────────────
 
 class _EntregableRow extends StatelessWidget {
-  final IconData icon;
-  final Color iconBg;
-  final Color iconColor;
+  final String url;
   final String title;
-  final String subtitle;
+  final bool isImage;
+  final bool isLink;
 
   const _EntregableRow({
-    required this.icon,
-    required this.iconBg,
-    required this.iconColor,
+    required this.url,
     required this.title,
-    required this.subtitle,
+    required this.isImage,
+    this.isLink = false,
   });
+
+  Future<void> _open(BuildContext context) async {
+    final uri = Uri.tryParse(url);
+    if (uri == null) return;
+    try {
+      final ok = await launchUrl(uri, mode: LaunchMode.platformDefault);
+      if (!ok && context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No se pudo abrir el enlace')),
+        );
+      }
+    } catch (_) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No se pudo abrir el enlace')),
+        );
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: BoxDecoration(
-        color: const Color(0xFFFBFAF4),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE7E2D5)),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 40, height: 40,
-            decoration: BoxDecoration(
-              color: iconBg, borderRadius: BorderRadius.circular(10)),
-            child: Icon(icon, color: iconColor, size: 20),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title,
-                    style: GoogleFonts.hankenGrotesk(
-                      fontSize: 13.5, fontWeight: FontWeight.w600,
-                      color: const Color(0xFF21201B),
+    return GestureDetector(
+      onTap: () => _open(context),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFBFAF4),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xFFE7E2D5)),
+        ),
+        child: Column(
+          children: [
+            // Vista previa de imagen
+            if (isImage)
+              ClipRRect(
+                borderRadius:
+                    const BorderRadius.vertical(top: Radius.circular(15)),
+                child: Image.network(
+                  url,
+                  height: 160,
+                  width: double.infinity,
+                  fit: BoxFit.cover,
+                  loadingBuilder: (_, child, progress) => progress == null
+                      ? child
+                      : Container(
+                          height: 160,
+                          color: const Color(0xFFF0EDE2),
+                          child: const Center(
+                            child: CircularProgressIndicator(
+                                color: Color(0xFFDC2F26), strokeWidth: 2),
+                          ),
+                        ),
+                  errorBuilder: (_, __, ___) => Container(
+                    height: 80,
+                    color: const Color(0xFFF0EDE2),
+                    child: const Center(
+                      child: Icon(Icons.broken_image_outlined,
+                          color: Color(0xFF9A978C), size: 32),
                     ),
-                    overflow: TextOverflow.ellipsis),
-                Text(subtitle,
-                    style: GoogleFonts.hankenGrotesk(
-                        fontSize: 12, color: const Color(0xFF9A978C))),
-              ],
+                  ),
+                ),
+              ),
+            // Fila inferior
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              child: Row(
+                children: [
+                  Container(
+                    width: 38, height: 38,
+                    decoration: BoxDecoration(
+                      color: isLink
+                          ? const Color(0xFFE4EAF1)
+                          : isImage
+                              ? const Color(0xFFDDF0E4)
+                              : const Color(0xFFFAE7E2),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(
+                      isLink
+                          ? Icons.link_rounded
+                          : isImage
+                              ? Icons.image_outlined
+                              : Icons.description_outlined,
+                      color: isLink
+                          ? const Color(0xFF5C7B97)
+                          : isImage
+                              ? const Color(0xFF4A8C6A)
+                              : const Color(0xFFDC2F26),
+                      size: 20,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(title,
+                            style: GoogleFonts.hankenGrotesk(
+                              fontSize: 13.5,
+                              fontWeight: FontWeight.w600,
+                              color: const Color(0xFF21201B),
+                            ),
+                            overflow: TextOverflow.ellipsis),
+                        Text(
+                          isLink
+                              ? 'Toca para abrir'
+                              : isImage
+                                  ? 'Toca para ver en pantalla completa'
+                                  : 'Toca para descargar',
+                          style: GoogleFonts.hankenGrotesk(
+                              fontSize: 12,
+                              color: const Color(0xFF9A978C)),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Icon(
+                    isImage
+                        ? Icons.open_in_full_rounded
+                        : Icons.open_in_new_rounded,
+                    color: const Color(0xFF9A978C),
+                    size: 18,
+                  ),
+                ],
+              ),
             ),
-          ),
-          const SizedBox(width: 8),
-          const Icon(Icons.chevron_right_rounded,
-              color: Color(0xFF9A978C), size: 20),
-        ],
+          ],
+        ),
       ),
     );
   }
