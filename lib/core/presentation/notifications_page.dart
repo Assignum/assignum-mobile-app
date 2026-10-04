@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:assignum/activities/infrastructure/activity_service.dart';
+import 'package:assignum/core/infrastructure/api_client.dart';
 
 // ── Tokens ─────────────────────────────────────────────────────────────
 const _bg           = Color(0xFFF4F2EA);
@@ -36,20 +37,38 @@ class _NotificationsPageState extends State<NotificationsPage> {
   }
 
   Future<void> _load() async {
-    final list = await _service.getPendingInvitations();
-    if (mounted) setState(() { _invitations = list; _loading = false; });
+    try {
+      final list = await _service.getPendingInvitations();
+      if (mounted) setState(() { _invitations = list; _loading = false; });
+    } catch (_) {
+      if (mounted) setState(() => _loading = false);
+    }
   }
 
-  Future<void> _accept(String activityId) async {
+  Future<void> _accept(String activityId) =>
+      _respond(() => _service.acceptInvitation(activityId));
+
+  Future<void> _decline(String activityId) =>
+      _respond(() => _service.declineInvitation(activityId));
+
+  Future<void> _respond(Future<void> Function() action) async {
     setState(() => _loading = true);
-    await _service.acceptInvitation(activityId);
+    try {
+      await action();
+    } on ApiException catch (e) {
+      // 404 / 400: la actividad fue eliminada o la invitación ya no está pendiente
+      _showError(e.statusCode == 404 || e.statusCode == 400
+          ? 'Esta invitación ya no está disponible.'
+          : 'No se pudo procesar la invitación. Inténtalo de nuevo.');
+    } catch (_) {
+      _showError('No se pudo procesar la invitación. Revisa tu conexión e inténtalo de nuevo.');
+    }
     await _load();
   }
 
-  Future<void> _decline(String activityId) async {
-    setState(() => _loading = true);
-    await _service.declineInvitation(activityId);
-    await _load();
+  void _showError(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
   }
 
   String _initials(String name) {

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:assignum/activities/domain/activity.dart';
+import 'package:assignum/activities/domain/auth_facade.dart';
 import 'package:assignum/activities/infrastructure/activity_service.dart';
 import 'package:assignum/activities/presentation/activity_details_page.dart';
 import 'package:assignum/shared/presentation/widgets/premium_app_bar.dart';
@@ -196,7 +197,10 @@ class _ActivitiesListPageState extends State<ActivitiesListPage> {
                                     activity: act, isCreationFlow: false),
                               ),
                             ),
-                            onDelete: () => showDialog(
+                            // Solo el líder puede eliminar la actividad
+                            onDelete: act.uid != IAuthFacade.instance.currentUserId
+                                ? null
+                                : () => showDialog(
                               context: context,
                               builder: (ctx) => AlertDialog(
                                 shape: RoundedRectangleBorder(
@@ -219,9 +223,16 @@ class _ActivitiesListPageState extends State<ActivitiesListPage> {
                                             fontWeight: FontWeight.w600)),
                                   ),
                                   ElevatedButton(
-                                    onPressed: () {
+                                    onPressed: () async {
                                       Navigator.pop(ctx);
-                                      ActivityService().deleteActivity(act.id);
+                                      try {
+                                        await ActivityService().deleteActivity(act.id);
+                                      } catch (_) {
+                                        if (!context.mounted) return;
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                            const SnackBar(content: Text(
+                                                'No se pudo eliminar la actividad. Inténtalo de nuevo.')));
+                                      }
                                     },
                                     style: ElevatedButton.styleFrom(
                                       backgroundColor: const Color(0xFFDC2F26),
@@ -299,7 +310,7 @@ class _ActivityCard extends StatelessWidget {
   final String initials;
   final Color avatarColor;
   final VoidCallback onTap;
-  final VoidCallback onDelete;
+  final VoidCallback? onDelete;
 
   const _ActivityCard({
     required this.activity,
@@ -429,12 +440,14 @@ class _ActivityCard extends StatelessWidget {
                           ],
                         ),
                       ),
-                      const SizedBox(width: 6),
-                      GestureDetector(
-                        onTap: onDelete,
-                        child: const Icon(Icons.delete_outline_rounded,
-                            size: 18, color: _text3),
-                      ),
+                      if (onDelete != null) ...[
+                        const SizedBox(width: 6),
+                        GestureDetector(
+                          onTap: onDelete,
+                          child: const Icon(Icons.delete_outline_rounded,
+                              size: 18, color: _text3),
+                        ),
+                      ],
                     ],
                   ),
                   const SizedBox(height: 4),

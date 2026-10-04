@@ -2,6 +2,13 @@ import 'package:assignum/chatbox/domain/chat_message.dart';
 import 'package:assignum/chatbox/domain/i_chatbox_service.dart';
 import 'package:assignum/core/infrastructure/api_client.dart';
 
+const _welcomeText =
+    '¡Hola! Puedo decirte tus **tareas pendientes**, cómo va una **actividad** o **agregar una tarea** por ti '
+    '(por ejemplo: "agrega la tarea hacer diapositivas a Proyecto de Física"). También respondo dudas sobre Assignum.';
+
+const _connectionErrorText =
+    'No pude conectarme con el asistente. Revisa tu conexión e inténtalo de nuevo en unos segundos.';
+
 class ChatboxService implements IChatboxService {
   static final ChatboxService _instance = ChatboxService._internal();
   factory ChatboxService() => _instance;
@@ -10,7 +17,7 @@ class ChatboxService implements IChatboxService {
   final List<ChatMessage> _messages = [
     ChatMessage(
       id: 'welcome',
-      text: '¡Hola! Te responderé las dudas que me comentes acerca de Assignum y cómo coordinar tus proyectos.',
+      text: _welcomeText,
       sender: MessageSender.bot,
       timestamp: DateTime.now(),
     ),
@@ -33,9 +40,11 @@ class ChatboxService implements IChatboxService {
     try {
       final data = await ApiClient.post('/api/chat/message', {'message': userText})
           as Map<String, dynamic>;
-      replyText = data['reply'] as String? ?? _fallbackReply(userText);
+      replyText = data['reply'] as String? ?? _connectionErrorText;
     } catch (_) {
-      replyText = _fallbackReply(userText);
+      // Las respuestas (incluidas las acciones sobre tareas) las genera el backend con Azure CLU;
+      // sin conexión no hay una respuesta local fiable que dar.
+      replyText = _connectionErrorText;
     }
 
     final botMsg = ChatMessage(
@@ -56,23 +65,9 @@ class ChatboxService implements IChatboxService {
     _messages.clear();
     _messages.add(ChatMessage(
       id: 'welcome',
-      text: '¡Hola! Te responderé las dudas que me comentes acerca de Assignum y cómo coordinar tus proyectos.',
+      text: _welcomeText,
       sender: MessageSender.bot,
       timestamp: DateTime.now(),
     ));
-  }
-
-  String _fallbackReply(String text) {
-    final q = text.toLowerCase();
-    if (q.contains('crear') || q.contains('actividad')) {
-      return 'Para crear una actividad ve al Menú Principal y selecciona "Crear Actividad". Ingresa nombre, fecha de entrega y tareas.';
-    }
-    if (q.contains('invitar') || q.contains('miembro')) {
-      return 'Para invitar compañeros entra a la actividad y pulsa "Invitar Miembros". Escribe su correo y confirma.';
-    }
-    if (q.contains('estado') || q.contains('tarea')) {
-      return 'Las tareas tienen 4 estados: Pendiente → En Progreso → Entregado → Verificado. Solo el Líder puede verificar.';
-    }
-    return 'Puedo ayudarte con creación de actividades, invitar miembros y estados de tareas. ¿Qué necesitas?';
   }
 }

@@ -127,7 +127,15 @@ class _ProfilePageState extends State<ProfilePage> {
       peerEvaluation:          _peerEval.round(),
     );
 
-    await _userService.createOrUpdateProfile(updated);
+    try {
+      await _userService.createOrUpdateProfile(updated);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _saving = false);
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('No se pudieron guardar los cambios. Revisa tu conexión e inténtalo de nuevo.')));
+      return;
+    }
     if (!mounted) return;
     setState(() { _saving = false; _profile = updated; });
 

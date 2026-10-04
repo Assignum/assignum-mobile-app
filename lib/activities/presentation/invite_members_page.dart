@@ -133,7 +133,9 @@ class _InviteMembersPageState extends State<InviteMembersPage> {
                         fontSize: 18, fontWeight: FontWeight.w700,
                         color: _text)),
                 const SizedBox(height: 8),
-                Text('${_emails.length} compañero${_emails.length == 1 ? '' : 's'} han sido invitados.',
+                Text(_emails.length == 1
+                        ? '1 compañero ha sido invitado.'
+                        : '${_emails.length} compañeros han sido invitados.',
                     textAlign: TextAlign.center,
                     style: GoogleFonts.hankenGrotesk(
                         fontSize: 14, color: _text2)),

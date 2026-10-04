@@ -31,6 +31,8 @@ class _ChatboxPageState extends State<ChatboxPage> {
   bool _isTyping = false;
 
   final List<String> _quickQuestions = [
+    '¿Qué tareas tengo pendientes?',
+    '¿Cómo van mis actividades?',
     '¿Qué es Assignum?',
     '¿Cómo creo una actividad?',
     '¿Cómo invito a miembros?',
