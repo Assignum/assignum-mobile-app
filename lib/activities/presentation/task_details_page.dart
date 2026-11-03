@@ -5,7 +5,10 @@ import 'package:assignum/activities/domain/activity.dart';
 import 'package:assignum/activities/domain/activity_task.dart';
 import 'package:assignum/activities/domain/auth_facade.dart';
 import 'package:assignum/activities/infrastructure/activity_service.dart';
+import 'package:assignum/activities/domain/workload.dart';
+import 'package:assignum/core/infrastructure/api_client.dart';
 import 'package:assignum/activities/presentation/member_task_page.dart';
+import 'package:assignum/activities/presentation/create_activity_page.dart' show AddTaskSheet;
 
 // ── Tokens ─────────────────────────────────────────────────────────────
 const _bg           = Color(0xFFF4F2EA);
@@ -41,11 +44,14 @@ class TaskDetailsPage extends StatefulWidget {
 
 class _TaskDetailsPageState extends State<TaskDetailsPage> {
   late ActivityTask _currentTask;
+  late String _assigneeName;
+  bool _reassigning = false;
 
   @override
   void initState() {
     super.initState();
     _currentTask = widget.task;
+    _assigneeName = widget.assigneeName;
   }
 
   // ── Helpers ─────────────────────────────────────────────────────────
@@ -97,6 +103,8 @@ class _TaskDetailsPageState extends State<TaskDetailsPage> {
   }
 
   String _initials(String name) {
+    // Sin prefijos como "(Líder)" para que las iniciales salgan del nombre real
+    name = name.replaceAll(RegExp(r'\(.*?\)'), '').replaceAll(RegExp(r'\s+'), ' ').trim();
     if (name.isEmpty) return '?';
     if (name.contains('@')) return name[0].toUpperCase();
     final parts = name.trim().split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
@@ -115,7 +123,7 @@ class _TaskDetailsPageState extends State<TaskDetailsPage> {
 
   Future<void> _approveTask(BuildContext context) async {
     try {
-      await ActivityService().verifyTaskDirectly(
+      await ActivityService().verifyTask(
           widget.activity.id, _currentTask.id);
     } catch (e) {
       if (!context.mounted) return;
@@ -177,6 +185,194 @@ class _TaskDetailsPageState extends State<TaskDetailsPage> {
     );
   }
 
+  // ── Cambiar responsable (asignación manual del líder) ───────────────
+
+  bool get _canReassign =>
+      _isLeader && !widget.activity.finalized && !_currentTask.isCompleted;
+
+  Future<void> _showReassignSheet() async {
+    final leaderEmail = IAuthFacade.instance.currentUserEmail ?? '';
+    final group = [
+      leaderEmail,
+      ...widget.activity.acceptedEmails,
+      ...widget.activity.invitedEmails,
+    ];
+    final loads = computeLoads(widget.activity.tasks, group);
+    String nameOf(String e) => e == leaderEmail
+        ? 'Tú (líder)'
+        : widget.activity.memberNames[e] ?? e;
+
+    // '' = dejar sin asignar
+    final picked = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: _surface2,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (ctx) => SafeArea(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * 0.75),
+          child: ListView(
+            shrinkWrap: true,
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
+            children: [
+              Text('Cambiar responsable',
+                  style: GoogleFonts.hankenGrotesk(
+                      fontSize: 17, fontWeight: FontWeight.w700, color: _text)),
+              const SizedBox(height: 4),
+              Text('La carga incluye tareas completadas. Si cambia de responsable, '
+                  'la tarea vuelve a "Pendiente".',
+                  style: GoogleFonts.hankenGrotesk(fontSize: 12.5, color: _text3)),
+              const SizedBox(height: 8),
+              ...group.map((e) {
+                final current = e == _currentTask.assignedToEmail;
+                final pending = widget.activity.invitedEmails.contains(e);
+                return ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: CircleAvatar(
+                    radius: 18,
+                    backgroundColor: _avatarColor(nameOf(e)),
+                    child: Text(_initials(nameOf(e)),
+                        style: GoogleFonts.hankenGrotesk(
+                            color: Colors.white, fontSize: 12, fontWeight: FontWeight.w700)),
+                  ),
+                  title: Text(nameOf(e) + (pending ? ' · pendiente' : ''),
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.hankenGrotesk(
+                          fontSize: 14, fontWeight: FontWeight.w600, color: _text)),
+                  subtitle: Text(describeLoad(loads[e] ?? MemberLoad()),
+                      style: GoogleFonts.hankenGrotesk(fontSize: 12.5, color: _text3)),
+                  trailing: current
+                      ? const Icon(Icons.check_rounded, color: _primary)
+                      : null,
+                  onTap: current ? null : () => Navigator.pop(ctx, e),
+                );
+              }),
+              if (_currentTask.assignedToEmail.isNotEmpty)
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.person_off_outlined, color: _text2),
+                  title: Text('Dejar sin asignar',
+                      style: GoogleFonts.hankenGrotesk(
+                          fontSize: 14, fontWeight: FontWeight.w600, color: _text2)),
+                  onTap: () => Navigator.pop(ctx, ''),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (picked == null || !mounted) return;
+
+    setState(() => _reassigning = true);
+    try {
+      await ActivityService().applyAssignments(
+        widget.activity.id,
+        {_currentTask.id: picked.isEmpty ? null : picked},
+      );
+      if (!mounted) return;
+      setState(() {
+        _currentTask = _currentTask.copyWith(assignedToEmail: picked, status: 'Pendiente');
+        _assigneeName = picked.isEmpty
+            ? 'Sin asignar'
+            : (picked == leaderEmail ? 'Tú (líder)' : nameOf(picked));
+      });
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(picked.isEmpty
+              ? 'La tarea quedó sin asignar'
+              : picked == leaderEmail
+                  ? 'Te asignaste la tarea'
+                  : 'Tarea asignada a ${nameOf(picked)}')));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('No se pudo reasignar: ${e is ApiException ? e.message : 'revisa tu conexión'}'),
+          backgroundColor: _primary));
+    } finally {
+      if (mounted) setState(() => _reassigning = false);
+    }
+  }
+
+  // ── Editar / eliminar la tarea (definición) ─────────────────────────
+
+  void _editTask() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: _surface2,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (_) => AddTaskSheet(
+        initialTask: _currentTask,
+        onAdd: (edited) async {
+          try {
+            await ActivityService().editTask(widget.activity.id, _currentTask.id, edited);
+            if (!mounted) return;
+            setState(() => _currentTask = _currentTask.copyWith(
+                  name: edited.name,
+                  taskType: edited.taskType,
+                  taskComplexity: edited.taskComplexity,
+                  priority: edited.priority,
+                  estimatedHours: edited.estimatedHours,
+                ));
+            ScaffoldMessenger.of(context)
+                .showSnackBar(const SnackBar(content: Text('Tarea actualizada')));
+          } catch (e) {
+            if (!mounted) return;
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                content: Text('No se pudo guardar: ${e is ApiException ? e.message : 'revisa tu conexión'}'),
+                backgroundColor: _primary));
+          }
+        },
+      ),
+    );
+  }
+
+  Future<void> _deleteTask() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        backgroundColor: _surface2,
+        title: Text('¿Eliminar tarea?',
+            style: GoogleFonts.hankenGrotesk(fontWeight: FontWeight.w700, color: _text)),
+        content: Text('"${_currentTask.name}" se eliminará de forma permanente, junto con sus '
+            'comentarios y archivos adjuntos.',
+            style: GoogleFonts.hankenGrotesk(color: _text2)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text('Cancelar',
+                style: GoogleFonts.hankenGrotesk(color: _text2, fontWeight: FontWeight.w600)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: _primary,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
+              elevation: 0,
+            ),
+            child: Text('Eliminar', style: GoogleFonts.hankenGrotesk(fontWeight: FontWeight.w600)),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    try {
+      await ActivityService().deleteTask(widget.activity.id, _currentTask.id);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Tarea eliminada')));
+      Navigator.pop(context);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('No se pudo eliminar: ${e is ApiException ? e.message : 'revisa tu conexión'}'),
+          backgroundColor: _primary));
+    }
+  }
+
   // ── Navigate to edit ─────────────────────────────────────────────────
 
   Future<void> _openModify(BuildContext context) async {
@@ -186,7 +382,7 @@ class _TaskDetailsPageState extends State<TaskDetailsPage> {
         builder: (_) => MemberTaskPage(
           activity: widget.activity,
           task: _currentTask,
-          assigneeName: widget.assigneeName,
+          assigneeName: _assigneeName,
         ),
       ),
     );
@@ -224,7 +420,7 @@ class _TaskDetailsPageState extends State<TaskDetailsPage> {
                     color: Colors.white.withValues(alpha: 0.08),
                     borderRadius: BorderRadius.circular(999),
                   ),
-                  child: const Icon(Icons.arrow_back_rounded,
+                  child: const Icon(Icons.arrow_back_rounded, semanticLabel: 'Volver',
                       color: Color(0xFFF6F3EA), size: 20),
                 ),
               ),
@@ -246,6 +442,17 @@ class _TaskDetailsPageState extends State<TaskDetailsPage> {
                       )),
                 ],
               ),
+              const Spacer(),
+              if (_isLeader && !widget.activity.finalized)
+                PopupMenuButton<String>(
+                  tooltip: 'Más opciones',
+                  icon: const Icon(Icons.more_vert_rounded, color: Color(0xFFF6F3EA)),
+                  onSelected: (v) => v == 'edit' ? _editTask() : _deleteTask(),
+                  itemBuilder: (_) => const [
+                    PopupMenuItem(value: 'edit', child: Text('Editar tarea')),
+                    PopupMenuItem(value: 'delete', child: Text('Eliminar tarea')),
+                  ],
+                ),
             ],
           ),
         ),
@@ -318,25 +525,40 @@ class _TaskDetailsPageState extends State<TaskDetailsPage> {
             children: [
               CircleAvatar(
                 radius: 20,
-                backgroundColor: _avatarColor(widget.assigneeName),
+                backgroundColor: _avatarColor(_assigneeName),
                 child: Text(
-                  _initials(widget.assigneeName),
+                  _initials(_assigneeName),
                   style: GoogleFonts.hankenGrotesk(
                     color: Colors.white, fontSize: 13, fontWeight: FontWeight.w700),
                 ),
               ),
               const SizedBox(width: 12),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(widget.assigneeName,
-                      style: GoogleFonts.hankenGrotesk(
-                        fontSize: 14, fontWeight: FontWeight.w600, color: _text)),
-                  Text(_assigneeSubtitle(status),
-                      style: GoogleFonts.hankenGrotesk(
-                          fontSize: 12.5, color: _text3)),
-                ],
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(_assigneeName,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.hankenGrotesk(
+                          fontSize: 14, fontWeight: FontWeight.w600, color: _text)),
+                    Text(_assigneeSubtitle(status),
+                        style: GoogleFonts.hankenGrotesk(
+                            fontSize: 12.5, color: _text3)),
+                  ],
+                ),
               ),
+              if (_canReassign)
+                _reassigning
+                    ? const SizedBox(
+                        width: 18, height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: _primary))
+                    : TextButton.icon(
+                        onPressed: _showReassignSheet,
+                        icon: const Icon(Icons.swap_horiz_rounded, size: 18, color: _primary),
+                        label: Text('Cambiar',
+                            style: GoogleFonts.hankenGrotesk(
+                                fontSize: 13.5, fontWeight: FontWeight.w700, color: _primary)),
+                      ),
             ],
           ),
         ],

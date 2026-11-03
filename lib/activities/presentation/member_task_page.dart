@@ -112,7 +112,7 @@ class _MemberTaskPageState extends State<MemberTaskPage> {
       }
       _pending.clear();
 
-      await ActivityService().updateTaskDirectly(
+      await ActivityService().updateTask(
         widget.activity.id,
         widget.task.id,
         status: _status,
@@ -250,7 +250,7 @@ class _MemberTaskPageState extends State<MemberTaskPage> {
                     color: Colors.white.withValues(alpha: 0.08),
                     borderRadius: BorderRadius.circular(999),
                   ),
-                  child: const Icon(Icons.arrow_back_rounded,
+                  child: const Icon(Icons.arrow_back_rounded, semanticLabel: 'Volver',
                       color: Color(0xFFF6F3EA), size: 20),
                 ),
               ),
@@ -672,7 +672,7 @@ class _PendingFileRow extends StatelessWidget {
                   onTap: onRemove,
                   child: const Padding(
                     padding: EdgeInsets.all(4),
-                    child: Icon(Icons.close_rounded, size: 18, color: _text3),
+                    child: Icon(Icons.close_rounded, semanticLabel: 'Quitar archivo', size: 18, color: _text3),
                   ),
                 ),
               ],
@@ -794,7 +794,7 @@ class _AttachmentRow extends StatelessWidget {
                     onTap: onRemove,
                     child: const Padding(
                       padding: EdgeInsets.all(4),
-                      child: Icon(Icons.close_rounded,
+                      child: Icon(Icons.close_rounded, semanticLabel: 'Quitar adjunto',
                           size: 18, color: _text3),
                     ),
                   ),

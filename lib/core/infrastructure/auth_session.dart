@@ -40,6 +40,13 @@ class AuthSession {
     _controller.add(true);
   }
 
+  /// Guarda un token renovado (los de Firebase duran 1 hora) sin emitir cambio de sesión.
+  Future<void> updateToken(String idToken) async {
+    _idToken = idToken;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('idToken', idToken);
+  }
+
   Future<void> clearSession() async {
     _idToken = null;
     _uid = null;

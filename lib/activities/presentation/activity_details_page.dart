@@ -1,11 +1,16 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:assignum/activities/presentation/fallback_notice.dart';
 import 'package:assignum/activities/domain/activity.dart';
 import 'package:assignum/activities/domain/activity_task.dart';
 import 'package:assignum/activities/domain/auth_facade.dart';
 import 'package:assignum/activities/infrastructure/activity_service.dart';
 import 'package:assignum/activities/presentation/task_details_page.dart';
+import 'package:assignum/activities/presentation/invite_members_page.dart';
+import 'package:assignum/activities/presentation/redistribute_tasks_page.dart';
+import 'package:assignum/activities/presentation/create_activity_page.dart' show AddTaskSheet;
+import 'package:assignum/activities/domain/workload.dart';
 import 'package:assignum/activities/presentation/member_task_page.dart';
 import 'package:assignum/core/infrastructure/api_client.dart';
 
@@ -55,7 +60,36 @@ class _ActivityDetailsPageState extends State<ActivityDetailsPage> {
     _activitySub = ActivityService()
         .getActivityStreamById(widget.activity.id)
         .listen((updated) {
-      if (updated != null && mounted) setState(() => _currentActivity = updated);
+      if (updated == null || !mounted) return;
+      final leaderChanged = updated.uid != _currentActivity.uid;
+      setState(() => _currentActivity = updated);
+      // Si se cedió el liderazgo, el nombre del líder guardado ya no corresponde
+      if (leaderChanged) _refreshLeaderName();
+    }, onError: (_) => _onAccessLost());
+  }
+
+  /// Firestore deja de entregar la actividad cuando el usuario ya no pertenece a ella (salió,
+  /// lo quitaron o se eliminó): se cierra la pantalla en vez de quedarse con datos viejos.
+  void _onAccessLost() {
+    if (!mounted) return;
+    if (!_leaving) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Ya no tienes acceso a esta actividad')));
+    }
+    // Cierra lo que haya encima (p. ej. el detalle de una tarea) y luego esta pantalla
+    final nav = Navigator.of(context);
+    final route = ModalRoute.of(context);
+    nav.popUntil((r) => r == route || r.isFirst);
+    if (route != null && route.isCurrent && !route.isFirst) nav.pop();
+  }
+
+  /// true mientras el propio usuario está saliendo (para no mostrar "ya no tienes acceso").
+  bool _leaving = false;
+
+  void _refreshLeaderName() {
+    ActivityService().getActivity(_currentActivity.id).then((a) {
+      if (!mounted || a == null || a.leaderName.isEmpty) return;
+      setState(() => _leaderName = a.leaderName);
     });
   }
 
@@ -113,6 +147,7 @@ class _ActivityDetailsPageState extends State<ActivityDetailsPage> {
   }
 
   String _initials(String name) {
+    name = _lettersOnly(name);
     if (name.isEmpty) return '?';
     if (name.contains('@')) return name[0].toUpperCase();
     final parts = name.trim().split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
@@ -236,9 +271,367 @@ class _ActivityDetailsPageState extends State<ActivityDetailsPage> {
     if (ok == true) {
       _showDivideSuccessDialog();
     } else if (ok == false) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Error al asignar tareas')),
+      _snack('Error al asignar tareas');
+    }
+  }
+
+  void _snack(String msg) =>
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+
+  String _apiError(Object e) => e is ApiException ? e.message : 'Revisa tu conexión';
+
+  bool get _isLeader => _currentActivity.uid == IAuthFacade.instance.currentUserId;
+
+  /// El líder puede gestionar el grupo mientras la actividad no esté finalizada.
+  bool get _canManage => _isLeader && !_currentActivity.finalized;
+
+  // ── Gestión del grupo (después de crearlo) ──────────────────────────
+
+  Future<void> _openInviteMembers() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => InviteMembersPage(
+            activity: _currentActivity, isCreationFlow: false),
+      ),
+    );
+    // El stream de Firestore actualiza la lista de miembros por sí solo.
+  }
+
+  Future<void> _openRedistribute({Set<String> initialTaskIds = const {}}) async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => RedistributeTasksPage(
+            activity: _currentActivity, initialTaskIds: initialTaskIds),
+      ),
+    );
+  }
+
+  Map<String, MemberLoad> get _loads => computeLoads(_currentActivity.tasks, [
+        IAuthFacade.instance.currentUserEmail ?? '',
+        ..._currentActivity.acceptedEmails,
+        ..._currentActivity.invitedEmails,
+      ]);
+
+  /// Tras quitar a alguien, sus tareas abiertas quedan sin asignar: ofrecer repartirlas.
+  Future<void> _offerRedistribute(List<String> taskIds) async {
+    if (taskIds.isEmpty || !mounted) return;
+    final n = taskIds.length;
+    final go = await _confirmDialog(
+      title: '$n tarea${n == 1 ? '' : 's'} sin asignar',
+      message: '¿Quieres repartir ${n == 1 ? 'esa tarea' : 'esas tareas'} ahora entre el resto del grupo?',
+      confirmLabel: 'Redistribuir',
+      cancelLabel: 'Más tarde',
+    );
+    if (go == true && mounted) await _openRedistribute(initialTaskIds: taskIds.toSet());
+  }
+
+  Future<bool?> _confirmDialog({
+    required String title,
+    required String message,
+    required String confirmLabel,
+    String cancelLabel = 'Cancelar',
+  }) =>
+      showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          backgroundColor: _surface2,
+          title: Text(title,
+              style: GoogleFonts.hankenGrotesk(fontWeight: FontWeight.w700, color: _text)),
+          content: Text(message, style: GoogleFonts.hankenGrotesk(color: _text2)),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text(cancelLabel,
+                  style: GoogleFonts.hankenGrotesk(color: _text2, fontWeight: FontWeight.w600)),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _primary,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
+                elevation: 0,
+              ),
+              child: Text(confirmLabel,
+                  style: GoogleFonts.hankenGrotesk(fontWeight: FontWeight.w600)),
+            ),
+          ],
+        ),
       );
+
+  void _showMemberActions(String email, {required bool pending}) {
+    final name = pending ? email : _memberName(email);
+    final load = _loads[email] ?? MemberLoad();
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: _surface2,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(name,
+                  style: GoogleFonts.hankenGrotesk(
+                      fontSize: 17, fontWeight: FontWeight.w700, color: _text)),
+              const SizedBox(height: 2),
+              Text(pending ? 'Invitación pendiente · ${describeLoad(load)}' : describeLoad(load),
+                  style: GoogleFonts.hankenGrotesk(fontSize: 13, color: _text3)),
+              const SizedBox(height: 12),
+              if (pending) ...[
+                _SheetAction(
+                  icon: Icons.send_outlined,
+                  label: 'Reenviar invitación',
+                  onTap: () { Navigator.pop(ctx); _resendInvitation(email); },
+                ),
+                _SheetAction(
+                  icon: Icons.cancel_outlined,
+                  label: 'Cancelar invitación',
+                  destructive: true,
+                  onTap: () { Navigator.pop(ctx); _cancelInvitation(email); },
+                ),
+              ] else ...[
+                _SheetAction(
+                  icon: Icons.workspace_premium_outlined,
+                  label: 'Hacer líder',
+                  onTap: () { Navigator.pop(ctx); _transferLeadership(email); },
+                ),
+                _SheetAction(
+                  icon: Icons.person_remove_outlined,
+                  label: 'Quitar del grupo',
+                  destructive: true,
+                  onTap: () { Navigator.pop(ctx); _removeMember(email, load); },
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _resendInvitation(String email) async {
+    try {
+      await ActivityService().resendInvitation(_currentActivity.id, email);
+      _snack('Invitación reenviada a $email');
+    } catch (e) {
+      _snack('No se pudo reenviar: ${_apiError(e)}');
+    }
+  }
+
+  Future<void> _cancelInvitation(String email) async {
+    final ok = await _confirmDialog(
+      title: '¿Cancelar invitación?',
+      message: '$email ya no podrá unirse a "${_currentActivity.name}".',
+      confirmLabel: 'Cancelar invitación',
+      cancelLabel: 'Volver',
+    );
+    if (ok != true) return;
+    try {
+      final unassigned = await ActivityService().cancelInvitation(_currentActivity.id, email);
+      _snack('Invitación cancelada');
+      await _offerRedistribute(unassigned);
+    } catch (e) {
+      _snack('No se pudo cancelar: ${_apiError(e)}');
+    }
+  }
+
+  Future<void> _transferLeadership(String email) async {
+    final name = _memberName(email);
+    final ok = await _confirmDialog(
+      title: '¿Hacer líder a $name?',
+      message: 'Podrá invitar, asignar y verificar tareas y finalizar la actividad. '
+          'Tú pasarás a ser miembro y conservarás tus tareas.',
+      confirmLabel: 'Hacer líder',
+    );
+    if (ok != true) return;
+    try {
+      await ActivityService().transferLeadership(_currentActivity.id, email);
+      _snack('$name ahora es líder de la actividad');
+    } catch (e) {
+      _snack('No se pudo ceder el liderazgo: ${_apiError(e)}');
+    }
+  }
+
+  Future<void> _leaveActivity() async {
+    final myTasks = _currentActivity.tasks
+        .where((t) => t.assignedToEmail == IAuthFacade.instance.currentUserEmail && !t.isCompleted)
+        .length;
+    final tasksNote = myTasks > 0
+        ? ' Tus $myTasks tarea${myTasks == 1 ? '' : 's'} sin terminar quedarán sin asignar.'
+        : '';
+    final ok = await _confirmDialog(
+      title: '¿Salir de la actividad?',
+      message: 'Dejarás de ver "${_currentActivity.name}".$tasksNote Se avisará al líder.',
+      confirmLabel: 'Salir',
+    );
+    if (ok != true || !mounted) return;
+    final name = _currentActivity.name;
+    final messenger = ScaffoldMessenger.of(context);
+    _leaving = true;
+    try {
+      await ActivityService().leaveActivity(_currentActivity.id);
+      messenger.showSnackBar(SnackBar(content: Text('Saliste de "$name"')));
+      // Puede que la pantalla ya se haya cerrado sola al perder el acceso
+      if (mounted) Navigator.pop(context);
+    } catch (e) {
+      _leaving = false;
+      if (mounted) _snack('No se pudo salir: ${_apiError(e)}');
+    }
+  }
+
+  Future<void> _showEditActivity() async {
+    final nameCtrl = TextEditingController(text: _currentActivity.name);
+    final linkCtrl = TextEditingController(text: _currentActivity.documentLink);
+    var dueDate = _currentActivity.dueDate;
+    final saved = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: _surface2,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheet) => Padding(
+          padding: EdgeInsets.fromLTRB(
+              20, 20, 20, MediaQuery.of(ctx).viewInsets.bottom + MediaQuery.of(ctx).padding.bottom + 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Editar actividad',
+                  style: GoogleFonts.hankenGrotesk(fontSize: 18, fontWeight: FontWeight.w700, color: _text)),
+              const SizedBox(height: 16),
+              TextField(
+                controller: nameCtrl,
+                decoration: const InputDecoration(labelText: 'Nombre de la actividad'),
+              ),
+              const SizedBox(height: 12),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.calendar_today_outlined, color: _text2),
+                title: Text('Fecha límite: ${_formatDate(dueDate)} ${dueDate.year}',
+                    style: GoogleFonts.hankenGrotesk(fontSize: 14, color: _text)),
+                trailing: Text('Cambiar',
+                    style: GoogleFonts.hankenGrotesk(fontWeight: FontWeight.w700, color: _primary)),
+                onTap: () async {
+                  final today = DateTime.now();
+                  final picked = await showDatePicker(
+                    context: ctx,
+                    initialDate: dueDate.isBefore(today) ? today : dueDate,
+                    firstDate: DateTime(today.year, today.month, today.day),
+                    lastDate: DateTime(today.year + 2),
+                  );
+                  if (picked != null) setSheet(() => dueDate = picked);
+                },
+              ),
+              const SizedBox(height: 4),
+              TextField(
+                controller: linkCtrl,
+                keyboardType: TextInputType.url,
+                decoration: const InputDecoration(labelText: 'Enlace del documento (opcional)'),
+              ),
+              const SizedBox(height: 20),
+              SizedBox(
+                width: double.infinity, height: 50,
+                child: ElevatedButton(
+                  onPressed: () {
+                    if (nameCtrl.text.trim().isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Ingresa el nombre')));
+                      return;
+                    }
+                    Navigator.pop(ctx, true);
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _primary,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
+                    elevation: 0,
+                  ),
+                  child: Text('Guardar cambios',
+                      style: GoogleFonts.hankenGrotesk(fontWeight: FontWeight.w700)),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (saved != true) return;
+
+    final name = nameCtrl.text.trim();
+    final link = linkCtrl.text.trim();
+    final dateChanged = !DateUtils.isSameDay(dueDate, _currentActivity.dueDate);
+    try {
+      await ActivityService().updateActivity(
+        _currentActivity.id,
+        name: name != _currentActivity.name ? name : null,
+        dueDate: dateChanged ? dueDate : null,
+        documentLink: link != _currentActivity.documentLink ? link : null,
+      );
+      _snack(dateChanged
+          ? 'Actividad actualizada. Se avisó a los miembros del cambio de fecha.'
+          : 'Actividad actualizada');
+    } catch (e) {
+      _snack('No se pudo guardar: ${_apiError(e)}');
+    }
+  }
+
+  Future<void> _removeMember(String email, MemberLoad load) async {
+    final name = _memberName(email);
+    final tasksNote = load.activeTasks > 0
+        ? ' Sus ${load.activeTasks} tarea${load.activeTasks == 1 ? '' : 's'} sin terminar '
+            'quedarán sin asignar.'
+        : '';
+    final ok = await _confirmDialog(
+      title: '¿Quitar a $name?',
+      message: 'Dejará de ver la actividad.$tasksNote Las tareas que ya entregó se conservan a su nombre.',
+      confirmLabel: 'Quitar',
+    );
+    if (ok != true) return;
+    try {
+      final unassigned = await ActivityService().removeMember(_currentActivity.id, email);
+      _snack('$name ya no está en el grupo');
+      await _offerRedistribute(unassigned);
+    } catch (e) {
+      _snack('No se pudo quitar: ${_apiError(e)}');
+    }
+  }
+
+  // ── Agregar tareas después de crear la actividad ────────────────────
+
+  void _showAddTask() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: _surface2,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (_) => AddTaskSheet(onAdd: _addTask),
+    );
+  }
+
+  Future<void> _addTask(ActivityTask task) async {
+    try {
+      final created = await ActivityService().addTasks(_currentActivity.id, [task]);
+      if (!mounted) return;
+      final assignNow = await _confirmDialog(
+        title: 'Tarea agregada',
+        message: '"${task.name}" está sin asignar. ¿Quieres asignarla ahora?',
+        confirmLabel: 'Asignar',
+        cancelLabel: 'Más tarde',
+      );
+      if (assignNow == true && mounted) {
+        await _openRedistribute(initialTaskIds: created.map((t) => t.id).toSet());
+      }
+    } catch (e) {
+      _snack('No se pudo agregar la tarea: ${_apiError(e)}');
     }
   }
 
@@ -308,7 +701,14 @@ class _ActivityDetailsPageState extends State<ActivityDetailsPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _HeaderIconBtn(icon: Icons.arrow_back_rounded, onTap: () => Navigator.pop(context)),
+              Row(
+                children: [
+                  _HeaderIconBtn(icon: Icons.arrow_back_rounded, label: 'Volver', onTap: () => Navigator.pop(context)),
+                  const Spacer(),
+                  if (_canManage && !widget.isCreationFlow)
+                    _HeaderIconBtn(icon: Icons.edit_outlined, label: 'Editar actividad', onTap: _showEditActivity),
+                ],
+              ),
               const SizedBox(height: 16),
               _HeaderStatusBadge(status: status),
               const SizedBox(height: 10),
@@ -326,7 +726,7 @@ class _ActivityDetailsPageState extends State<ActivityDetailsPage> {
                 children: [
                   _MetaItem(icon: Icons.calendar_today_outlined, label: _formatDate(_currentActivity.dueDate)),
                   const SizedBox(width: 20),
-                  _MetaItem(icon: Icons.people_outline_rounded, label: '$_memberCount miembros'),
+                  _MetaItem(icon: Icons.people_outline_rounded, label: '$_memberCount ${_memberCount == 1 ? 'miembro' : 'miembros'}'),
                   const SizedBox(width: 20),
                   _MetaItem(icon: Icons.track_changes_rounded, label: '$progress%'),
                 ],
@@ -340,10 +740,19 @@ class _ActivityDetailsPageState extends State<ActivityDetailsPage> {
 
   // ── Members list ─────────────────────────────────────────────────────
 
+  String _memberName(String email) =>
+      _currentActivity.memberNames[email] ??
+      _currentActivity.memberNames[email.replaceAll('.', '_')] ??
+      email;
+
   Widget _buildMembersList() {
-    final isLeader = _currentActivity.uid == IAuthFacade.instance.currentUserId;
+    final isLeader = _isLeader;
     final accepted = _currentActivity.acceptedEmails;
     final pending = _currentActivity.invitedEmails;
+    final loads = isLeader ? _loads : const <String, MemberLoad>{};
+
+    String? loadText(String email) =>
+        isLeader ? describeLoad(loads[email] ?? MemberLoad()) : null;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -354,18 +763,22 @@ class _ActivityDetailsPageState extends State<ActivityDetailsPage> {
           isLeader: true,
           isPending: false,
           index: 0,
+          subtitle: loadText(IAuthFacade.instance.currentUserEmail ?? ''),
         ),
         const SizedBox(height: 8),
         // Accepted
         ...accepted.asMap().entries.map((e) {
           final email = e.value;
-          final name = _currentActivity.memberNames[email] ??
-              _currentActivity.memberNames[email.replaceAll('.', '_')] ??
-              email;
           return Padding(
             padding: const EdgeInsets.only(bottom: 8),
             child: _MemberTile(
-              name: name, isLeader: false, isPending: false, index: e.key + 1),
+              name: _memberName(email),
+              isLeader: false,
+              isPending: false,
+              index: e.key + 1,
+              subtitle: loadText(email),
+              onTap: _canManage ? () => _showMemberActions(email, pending: false) : null,
+            ),
           );
         }),
         // Pending invites
@@ -376,8 +789,36 @@ class _ActivityDetailsPageState extends State<ActivityDetailsPage> {
                 isLeader: false,
                 isPending: true,
                 index: accepted.length + e.key + 1,
+                subtitle: loadText(e.value),
+                onTap: _canManage ? () => _showMemberActions(e.value, pending: true) : null,
               ),
             )),
+        // Invitar más estudiantes (líder, actividad abierta)
+        if (_canManage) ...[
+          const SizedBox(height: 8),
+          _OutlineActionButton(
+            icon: Icons.person_add_alt_1_outlined,
+            label: 'Invitar estudiantes',
+            onTap: _openInviteMembers,
+          ),
+          if (accepted.isNotEmpty || pending.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text('Toca a un integrante para reenviar o cancelar su invitación, cederle el liderazgo o quitarlo del grupo.',
+                  style: GoogleFonts.hankenGrotesk(fontSize: 12, color: _text3)),
+            ),
+        ],
+        // Un miembro (no líder) puede salir por su cuenta
+        if (!isLeader &&
+            !_currentActivity.finalized &&
+            accepted.contains(IAuthFacade.instance.currentUserEmail)) ...[
+          const SizedBox(height: 8),
+          _OutlineActionButton(
+            icon: Icons.logout_rounded,
+            label: 'Salir de la actividad',
+            onTap: _leaveActivity,
+          ),
+        ],
         // Dividir tareas (only in creation flow)
         if (widget.isCreationFlow) ...[
           const SizedBox(height: 16),
@@ -405,56 +846,138 @@ class _ActivityDetailsPageState extends State<ActivityDetailsPage> {
 
   // ── Tasks list ───────────────────────────────────────────────────────
 
+  /// Nombre a mostrar para el responsable de una tarea.
+  String _assigneeDisplayName(String email) {
+    final currentUserEmail = IAuthFacade.instance.currentUserEmail;
+    if (email.isEmpty) return 'Sin asignar';
+    if (email == currentUserEmail) {
+      // Leader name is already resolved in _leaderName (real name, not 'Tú')
+      if (_isLeader) return '(Líder) $_leaderName';
+      return _currentActivity.memberNames[email] ??
+          _currentActivity.memberNames[email.replaceAll('.', '_')] ??
+          IAuthFacade.instance.currentUserDisplayName ??
+          email;
+    }
+    if (_currentActivity.acceptedEmails.contains(email)) return _memberName(email);
+    // Pending invite — show email
+    if (_currentActivity.invitedEmails.contains(email)) return email;
+    // Ya no está en el grupo pero conservamos su nombre (tareas que entregó antes de salir)
+    if (_currentActivity.memberNames.containsKey(email)) {
+      return '${_memberName(email)} (ya no está)';
+    }
+    // Not a member nor pending — must be the leader
+    return '(Líder) $_leaderName';
+  }
+
+  Widget _buildTasksHeader(int unassignedCount) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Column(
+        children: [
+          if (_currentActivity.assignedWithoutMl) ...[
+            FallbackAssignmentNotice(onRedistribute: () => _openRedistribute()),
+            const SizedBox(height: 10),
+          ],
+          if (unassignedCount > 0)
+            GestureDetector(
+              onTap: () => _openRedistribute(
+                initialTaskIds: _currentActivity.tasks
+                    .where((t) => t.assignedToEmail.isEmpty && !t.isCompleted)
+                    .map((t) => t.id)
+                    .toSet(),
+              ),
+              child: Container(
+                margin: const EdgeInsets.only(bottom: 10),
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF4E7D6),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.assignment_late_outlined, color: Color(0xFFB26B36), size: 20),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                          '$unassignedCount tarea${unassignedCount == 1 ? '' : 's'} sin asignar',
+                          style: GoogleFonts.hankenGrotesk(
+                              fontSize: 14, fontWeight: FontWeight.w700,
+                              color: const Color(0xFFB26B36))),
+                    ),
+                    Text('Asignar',
+                        style: GoogleFonts.hankenGrotesk(
+                            fontSize: 13.5, fontWeight: FontWeight.w700, color: _primary)),
+                    const Icon(Icons.chevron_right_rounded, color: _primary, size: 20),
+                  ],
+                ),
+              ),
+            ),
+          Row(
+            children: [
+              Expanded(
+                child: _OutlineActionButton(
+                  icon: Icons.add_rounded,
+                  label: 'Agregar tarea',
+                  onTap: _showAddTask,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _OutlineActionButton(
+                  icon: Icons.shuffle_rounded,
+                  label: 'Redistribuir',
+                  onTap: _currentActivity.tasks.any((t) => !t.isCompleted)
+                      ? () => _openRedistribute()
+                      : null,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildTasksList() {
-    final isLeader = _currentActivity.uid == IAuthFacade.instance.currentUserId;
+    final isLeader = _isLeader;
     final currentUserEmail = IAuthFacade.instance.currentUserEmail;
     final tasks = _currentActivity.tasks;
+    final showHeader = _canManage && !widget.isCreationFlow;
 
     if (tasks.isEmpty) {
-      return Center(
-        child: Text('Sin tareas aún',
-            style: GoogleFonts.hankenGrotesk(color: _text3, fontSize: 14)),
+      return ListView(
+        padding: EdgeInsets.only(bottom: MediaQuery.of(context).padding.bottom + 16),
+        children: [
+          if (showHeader) _buildTasksHeader(0),
+          const SizedBox(height: 40),
+          Center(
+            child: Text('Sin tareas aún',
+                style: GoogleFonts.hankenGrotesk(color: _text3, fontSize: 14)),
+          ),
+        ],
       );
     }
+
+    final unassignedCount =
+        tasks.where((t) => t.assignedToEmail.isEmpty && !t.isCompleted).length;
 
     return ListView.builder(
       padding: EdgeInsets.only(
           bottom: MediaQuery.of(context).padding.bottom + 16),
-      itemCount: tasks.length,
-      itemBuilder: (ctx, i) {
-        final task = tasks[i];
+      itemCount: tasks.length + (showHeader ? 1 : 0),
+      itemBuilder: (ctx, index) {
+        if (showHeader && index == 0) return _buildTasksHeader(unassignedCount);
+        final task = tasks[showHeader ? index - 1 : index];
         final canTap = isLeader || task.assignedToEmail == currentUserEmail;
 
-        String displayName;
-        if (task.assignedToEmail.isEmpty) {
-          displayName = 'Sin asignar';
-        } else if (task.assignedToEmail == currentUserEmail) {
-          // Leader name is already resolved in _leaderName (real name, not 'Tú')
-          // For members, look up in memberNames
-          final myName = isLeader
-              ? _leaderName
-              : _currentActivity.memberNames[task.assignedToEmail] ??
-                  _currentActivity.memberNames[
-                      task.assignedToEmail.replaceAll('.', '_')] ??
-                  IAuthFacade.instance.currentUserDisplayName ??
-                  task.assignedToEmail;
-          displayName = isLeader ? '(Líder) $myName' : myName;
-        } else if (_currentActivity.acceptedEmails.contains(task.assignedToEmail)) {
-          displayName = _currentActivity.memberNames[task.assignedToEmail] ??
-              _currentActivity.memberNames[task.assignedToEmail.replaceAll('.', '_')] ??
-              task.assignedToEmail;
-        } else if (_currentActivity.invitedEmails.contains(task.assignedToEmail)) {
-          // Pending invite — show email
-          displayName = task.assignedToEmail;
-        } else {
-          // Not a member nor pending — must be the leader
-          displayName = '(Líder) $_leaderName';
-        }
-
+        final displayName = _assigneeDisplayName(task.assignedToEmail);
+        const leftSuffix = ' (ya no está)';
         final shortDisplay = displayName == 'Sin asignar' ||
                 displayName.startsWith('(Líder)')
             ? displayName
-            : _shortName(displayName);
+            : displayName.endsWith(leftSuffix)
+                ? '${_shortName(displayName.substring(0, displayName.length - leftSuffix.length))}$leftSuffix'
+                : _shortName(displayName);
 
         return _TaskCard(
           task: task,
@@ -548,12 +1071,17 @@ class _ActivityDetailsPageState extends State<ActivityDetailsPage> {
   }
 }
 
+/// Quita prefijos como "(Líder)" para que las iniciales salgan del nombre real.
+String _lettersOnly(String name) =>
+    name.replaceAll(RegExp(r'\(.*?\)'), '').replaceAll(RegExp(r'\s+'), ' ').trim();
+
 // ── Subwidgets ─────────────────────────────────────────────────────────
 
 class _HeaderIconBtn extends StatelessWidget {
   final IconData icon;
   final VoidCallback onTap;
-  const _HeaderIconBtn({required this.icon, required this.onTap});
+  final String label;
+  const _HeaderIconBtn({required this.icon, required this.onTap, required this.label});
 
   @override
   Widget build(BuildContext context) => GestureDetector(
@@ -564,7 +1092,7 @@ class _HeaderIconBtn extends StatelessWidget {
             color: Colors.white.withValues(alpha: 0.08),
             borderRadius: BorderRadius.circular(999),
           ),
-          child: Icon(icon, color: const Color(0xFFF6F3EA), size: 20),
+          child: Icon(icon, color: const Color(0xFFF6F3EA), size: 20, semanticLabel: label),
         ),
       );
 }
@@ -814,14 +1342,20 @@ class _MemberTile extends StatelessWidget {
   final bool isLeader;
   final bool isPending;
   final int index;
+  final String? subtitle;
+  final VoidCallback? onTap;
   const _MemberTile({
     required this.name,
     required this.isLeader,
     required this.isPending,
     required this.index,
+    this.subtitle,
+    this.onTap,
   });
 
   String _initials() {
+    final name = _lettersOnly(this.name);
+    if (name.isEmpty) return '?';
     if (name.contains('@')) return name[0].toUpperCase();
     final parts = name.trim().split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
     if (parts.length >= 2) return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
@@ -831,7 +1365,9 @@ class _MemberTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = _avatarPalette[index % _avatarPalette.length];
-    return Container(
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
         color: _surface,
@@ -849,19 +1385,83 @@ class _MemberTile extends StatelessWidget {
           ),
           const SizedBox(width: 12),
           Expanded(
-            child: Text(name,
-                style: GoogleFonts.hankenGrotesk(
-                    fontSize: 14, fontWeight: FontWeight.w600, color: _text),
-                overflow: TextOverflow.ellipsis),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(name,
+                    style: GoogleFonts.hankenGrotesk(
+                        fontSize: 14, fontWeight: FontWeight.w600, color: _text),
+                    overflow: TextOverflow.ellipsis),
+                if (subtitle != null)
+                  Text(subtitle!,
+                      style: GoogleFonts.hankenGrotesk(fontSize: 12, color: _text3),
+                      overflow: TextOverflow.ellipsis),
+              ],
+            ),
           ),
           if (isLeader)
             _Pill(label: 'Líder', bg: _primaryTint, fg: _primary),
           if (isPending)
             _Pill(label: 'Pendiente', bg: const Color(0xFFF4E7D6), fg: const Color(0xFFB26B36)),
+          if (onTap != null) ...[
+            const SizedBox(width: 4),
+            const Icon(Icons.more_vert_rounded, size: 18, color: _text3),
+          ],
         ],
+      ),
       ),
     );
   }
+}
+
+class _SheetAction extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  final bool destructive;
+  const _SheetAction({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.destructive = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final color = destructive ? _primary : _text;
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      leading: Icon(icon, color: color),
+      title: Text(label,
+          style: GoogleFonts.hankenGrotesk(fontSize: 15, fontWeight: FontWeight.w600, color: color)),
+      onTap: onTap,
+    );
+  }
+}
+
+class _OutlineActionButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback? onTap;
+  const _OutlineActionButton({required this.icon, required this.label, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+        width: double.infinity, height: 46,
+        child: OutlinedButton.icon(
+          onPressed: onTap,
+          icon: Icon(icon, size: 18, color: onTap == null ? _text3 : _primary),
+          label: Text(label,
+              style: GoogleFonts.hankenGrotesk(
+                  fontSize: 14, fontWeight: FontWeight.w600,
+                  color: onTap == null ? _text3 : _primary)),
+          style: OutlinedButton.styleFrom(
+            backgroundColor: onTap == null ? _surfaceInset : _primaryTint,
+            side: BorderSide.none,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
+          ),
+        ),
+      );
 }
 
 class _Pill extends StatelessWidget {

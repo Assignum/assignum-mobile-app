@@ -18,6 +18,9 @@ class NotificationService {
   static final navigatorKey       = GlobalKey<NavigatorState>();
   static final scaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
 
+  /// Cambia cada vez que llega un push con la app abierta, para que Inicio refresque sus contadores.
+  static final pushReceived = ValueNotifier<int>(0);
+
   static Future<void> init() async {
     FirebaseMessaging.onBackgroundMessage(_backgroundHandler);
 
@@ -25,7 +28,10 @@ class NotificationService {
     await _fcm.requestPermission(alert: true, badge: true, sound: true);
 
     // Notificación recibida con app en primer plano → SnackBar
-    FirebaseMessaging.onMessage.listen(_showSnackBar);
+    FirebaseMessaging.onMessage.listen((m) {
+      pushReceived.value++;
+      _showSnackBar(m);
+    });
 
     // Tap en notificación con app en background
     FirebaseMessaging.onMessageOpenedApp.listen((_) => _goToNotifications());
@@ -89,6 +95,9 @@ class NotificationService {
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
         duration: const Duration(seconds: 4),
+        // En Flutter actual un SnackBar con acción no se cierra solo (persist = true) y se
+        // queda tapando los botones inferiores; el aviso igual queda en la bandeja.
+        persist: false,
         action: SnackBarAction(
           label: 'Ver',
           textColor: const Color(0xFFDC2F26),

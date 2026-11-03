@@ -132,7 +132,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
                   children: [
                     GestureDetector(
                       onTap: () => Navigator.pop(context),
-                      child: const Icon(Icons.arrow_back_rounded,
+                      child: const Icon(Icons.arrow_back_rounded, semanticLabel: 'Volver',
                           color: _text, size: 24),
                     ),
                     Row(

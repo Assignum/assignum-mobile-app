@@ -102,6 +102,7 @@ class _LoginRegisterPageState extends State<LoginRegisterPage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   IconButton(
+                    tooltip: 'Volver',
                     icon: const Icon(Icons.arrow_back_rounded, color: Color(0xFF21201B)),
                     onPressed: () => Navigator.pop(context),
                     padding: EdgeInsets.zero,
@@ -540,6 +541,7 @@ class _PasswordField extends StatelessWidget {
             hintStyle:
                 GoogleFonts.hankenGrotesk(color: const Color(0xFF9A978C)),
             suffixIcon: IconButton(
+              tooltip: obscure ? 'Mostrar contraseña' : 'Ocultar contraseña',
               icon: Icon(
                 obscure
                     ? Icons.visibility_off_outlined

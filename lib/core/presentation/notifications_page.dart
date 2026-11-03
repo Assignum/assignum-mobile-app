@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:assignum/activities/domain/inbox_item.dart';
 import 'package:assignum/activities/infrastructure/activity_service.dart';
+import 'package:assignum/activities/presentation/activity_details_page.dart';
 import 'package:assignum/core/infrastructure/api_client.dart';
 
 // ── Tokens ─────────────────────────────────────────────────────────────
@@ -28,6 +30,7 @@ class NotificationsPage extends StatefulWidget {
 class _NotificationsPageState extends State<NotificationsPage> {
   final _service = ActivityService();
   List<Map<String, dynamic>> _invitations = [];
+  List<InboxItem> _inbox = [];
   bool _loading = true;
 
   @override
@@ -37,11 +40,44 @@ class _NotificationsPageState extends State<NotificationsPage> {
   }
 
   Future<void> _load() async {
+    final results = await Future.wait([
+      _service.getPendingInvitations().then<Object?>((v) => v, onError: (_) => null),
+      _service.getInbox().then<Object?>((v) => v, onError: (_) => null),
+    ]);
+    if (!mounted) return;
+    final invitations = results[0] as List<Map<String, dynamic>>?;
+    final inbox = results[1] as List<InboxItem>?;
+    setState(() {
+      if (invitations != null) _invitations = invitations;
+      if (inbox != null) _inbox = inbox;
+      _loading = false;
+    });
+    if (invitations == null || inbox == null) {
+      _showError('No se pudieron cargar todas las notificaciones. Desliza para reintentar.');
+    }
+    // Se marcan como leídos al verlos; el punto de "nuevo" se mantiene en esta visita.
+    if (inbox != null && inbox.any((i) => !i.read)) {
+      _service.markInboxRead().catchError((_) {});
+    }
+  }
+
+  bool _opening = false;
+
+  Future<void> _openActivity(InboxItem item) async {
+    // Evita abrir la actividad dos veces si se toca el aviso repetidamente
+    if (item.activityId.isEmpty || _opening) return;
+    _opening = true;
     try {
-      final list = await _service.getPendingInvitations();
-      if (mounted) setState(() { _invitations = list; _loading = false; });
-    } catch (_) {
-      if (mounted) setState(() => _loading = false);
+      final activity = await _service.getActivityFromFirestore(item.activityId);
+      if (!mounted) return;
+      if (activity == null) {
+        _showError('Esta actividad ya no está disponible.');
+        return;
+      }
+      await Navigator.push(context,
+          MaterialPageRoute(builder: (_) => ActivityDetailsPage(activity: activity)));
+    } finally {
+      _opening = false;
     }
   }
 
@@ -84,19 +120,28 @@ class _NotificationsPageState extends State<NotificationsPage> {
   @override
   Widget build(BuildContext context) {
     final count = _invitations.length;
+    final unread = _inbox.where((i) => !i.read).length;
     return Scaffold(
       backgroundColor: _bg,
       body: SafeArea(
         top: false,
         child: Column(
         children: [
-          _buildHeader(count),
+          _buildHeader(count, unread),
           Expanded(
             child: _loading
                 ? const Center(child: CircularProgressIndicator(color: _primary))
-                : _invitations.isEmpty
-                    ? _buildEmpty()
-                    : _buildList(),
+                : RefreshIndicator(
+                    color: _primary,
+                    onRefresh: _load,
+                    child: _invitations.isEmpty && _inbox.isEmpty
+                        ? ListView(children: [
+                            SizedBox(
+                                height: MediaQuery.of(context).size.height * 0.6,
+                                child: _buildEmpty()),
+                          ])
+                        : _buildList(),
+                  ),
           ),
         ],
         ),
@@ -104,7 +149,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
     );
   }
 
-  Widget _buildHeader(int count) {
+  Widget _buildHeader(int count, int unread) {
     return Container(
       decoration: const BoxDecoration(
         gradient: LinearGradient(
@@ -128,7 +173,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
                     color: Colors.white.withValues(alpha: 0.08),
                     borderRadius: BorderRadius.circular(999),
                   ),
-                  child: const Icon(Icons.arrow_back_rounded,
+                  child: const Icon(Icons.arrow_back_rounded, semanticLabel: 'Volver',
                       color: Color(0xFFF6F3EA), size: 20),
                 ),
               ),
@@ -143,9 +188,11 @@ class _NotificationsPageState extends State<NotificationsPage> {
                           fontSize: 17, fontWeight: FontWeight.w700,
                         )),
                     Text(
-                      count == 0
-                          ? 'Sin invitaciones pendientes'
-                          : '$count invitación${count == 1 ? '' : 'es'} pendiente${count == 1 ? '' : 's'}',
+                      [
+                        if (count > 0)
+                          '$count invitación${count == 1 ? '' : 'es'} pendiente${count == 1 ? '' : 's'}',
+                        if (unread > 0) '$unread aviso${unread == 1 ? '' : 's'} nuevo${unread == 1 ? '' : 's'}',
+                      ].join(' · ').ifEmpty('Todo al día'),
                       style: GoogleFonts.hankenGrotesk(
                         color: const Color(0xFFF6F3EA).withValues(alpha: 0.6),
                         fontSize: 12.5,
@@ -183,11 +230,11 @@ class _NotificationsPageState extends State<NotificationsPage> {
                 size: 30, color: _text3),
           ),
           const SizedBox(height: 16),
-          Text('Sin invitaciones',
+          Text('Sin notificaciones',
               style: GoogleFonts.hankenGrotesk(
                 fontSize: 16, fontWeight: FontWeight.w600, color: _text2)),
           const SizedBox(height: 4),
-          Text('No tienes invitaciones pendientes.',
+          Text('No tienes invitaciones ni avisos.',
               style: GoogleFonts.hankenGrotesk(fontSize: 13, color: _text3)),
         ],
       ),
@@ -195,34 +242,138 @@ class _NotificationsPageState extends State<NotificationsPage> {
   }
 
   Widget _buildList() {
-    return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
-      itemCount: _invitations.length + 1,
-      itemBuilder: (ctx, i) {
-        if (i == 0) {
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: Text('INVITACIONES',
-                style: GoogleFonts.hankenGrotesk(
-                  fontSize: 11, fontWeight: FontWeight.w600,
-                  color: _text3, letterSpacing: 1.2,
-                )),
-          );
-        }
-        final inv          = _invitations[i - 1];
+    final children = <Widget>[];
+    if (_invitations.isNotEmpty) {
+      children.add(const _SectionTitle('INVITACIONES'));
+      for (final inv in _invitations) {
         final activityId   = inv['activityId']   as String? ?? '';
         final activityName = inv['activityName'] as String? ?? 'Actividad';
         final leaderName   = inv['leaderName']   as String? ?? '';
-
-        return _InvitationCard(
+        children.add(_InvitationCard(
           activityName: activityName,
           leaderName: leaderName,
           initials: _initials(activityName),
           avatarColor: _avatarColor(activityName),
           onAccept: () => _accept(activityId),
           onDecline: () => _decline(activityId),
-        );
-      },
+        ));
+      }
+    }
+    if (_inbox.isNotEmpty) {
+      if (children.isNotEmpty) children.add(const SizedBox(height: 8));
+      children.add(const _SectionTitle('AVISOS'));
+      children.addAll(_inbox.map((item) => _InboxCard(
+            item: item,
+            onTap: item.activityId.isEmpty ? null : () => _openActivity(item),
+          )));
+    }
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+      children: children,
+    );
+  }
+}
+
+extension on String {
+  String ifEmpty(String fallback) => isEmpty ? fallback : this;
+}
+
+class _SectionTitle extends StatelessWidget {
+  final String text;
+  const _SectionTitle(this.text);
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: Text(text,
+            style: GoogleFonts.hankenGrotesk(
+              fontSize: 11, fontWeight: FontWeight.w600,
+              color: _text3, letterSpacing: 1.2,
+            )),
+      );
+}
+
+// ── Inbox card ─────────────────────────────────────────────────────────
+
+class _InboxCard extends StatelessWidget {
+  final InboxItem item;
+  final VoidCallback? onTap;
+  const _InboxCard({required this.item, this.onTap});
+
+  (IconData, Color, Color) get _style => switch (item.type) {
+        'invitation_accepted' => (Icons.person_add_alt_1_rounded, const Color(0xFFE7EFDC), const Color(0xFF6C8A57)),
+        'invitation_declined' || 'invitation_cancelled' || 'member_removed' =>
+          (Icons.person_off_outlined, const Color(0xFFF4E7D6), const Color(0xFFB26B36)),
+        'task_assigned' => (Icons.assignment_ind_outlined, const Color(0xFFE4EAF1), const Color(0xFF5C7B97)),
+        'task_unassigned' => (Icons.swap_horiz_rounded, const Color(0xFFF4E7D6), const Color(0xFFB26B36)),
+        'task_delivered' => (Icons.upload_outlined, const Color(0xFFE4EAF1), const Color(0xFF5C7B97)),
+        'due_reminder' || 'due_date_changed' => (Icons.alarm_rounded, const Color(0xFFFAE7E2), _primary),
+        'member_left' => (Icons.person_off_outlined, const Color(0xFFF4E7D6), const Color(0xFFB26B36)),
+        'leadership_transferred' => (Icons.workspace_premium_outlined, const Color(0xFFE7EFDC), const Color(0xFF6C8A57)),
+        _ => (Icons.notifications_none_rounded, _surfaceInset, _text2),
+      };
+
+  String _ago(DateTime d) {
+    final diff = DateTime.now().difference(d);
+    if (diff.inMinutes < 1) return 'ahora';
+    if (diff.inMinutes < 60) return 'hace ${diff.inMinutes} min';
+    if (diff.inHours < 24) return 'hace ${diff.inHours} h';
+    if (diff.inDays < 7) return 'hace ${diff.inDays} d';
+    return '${d.day}/${d.month}/${d.year}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final (icon, bg, fg) = _style;
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: _surface,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: item.read ? _border : fg.withValues(alpha: 0.5)),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 40, height: 40,
+              decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(12)),
+              child: Icon(icon, color: fg, size: 20),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(item.title,
+                            style: GoogleFonts.hankenGrotesk(
+                                fontSize: 14, fontWeight: FontWeight.w700, color: _text)),
+                      ),
+                      if (!item.read)
+                        Container(
+                          width: 8, height: 8,
+                          decoration: const BoxDecoration(color: _primary, shape: BoxShape.circle),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 3),
+                  Text(item.body,
+                      style: GoogleFonts.hankenGrotesk(fontSize: 13, color: _text2, height: 1.35)),
+                  const SizedBox(height: 4),
+                  Text(_ago(item.createdAt),
+                      style: GoogleFonts.hankenGrotesk(fontSize: 11.5, color: _text3)),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

@@ -26,9 +26,22 @@ class UserService {
     return Stream.fromFuture(getProfile());
   }
 
-  // Onboarding: crear perfil por primera vez (POST)
+  // Onboarding: crear perfil por primera vez (POST), con la aceptación del aviso
   Future<void> createProfile(UserProfile p) async {
-    await ApiClient.post('/api/users/me/profile', p.toApiMap());
+    await ApiClient.post('/api/users/me/profile', p.toApiMap(acceptPrivacyPolicy: true));
+  }
+
+  /// Registra la aceptación de la versión vigente del aviso de privacidad.
+  Future<void> acceptPrivacyPolicy() async {
+    await ApiClient.put('/api/users/me/profile', {
+      'privacyConsent': UserProfile.privacyConsentPayload,
+    });
+  }
+
+  /// Derecho de cancelación: borra la cuenta y los datos del usuario.
+  /// Lanza [ApiException] 409 si lidera actividades sin finalizar.
+  Future<void> deleteAccount() async {
+    await ApiClient.delete('/api/users/me');
   }
 
   // Edición: actualizar campos del perfil (PUT)
@@ -47,12 +60,13 @@ class UserService {
   }
 
   // Compatibilidad: intenta POST, si ya existe usa PUT
-  Future<void> createOrUpdateProfile(UserProfile p) async {
+  Future<void> createOrUpdateProfile(UserProfile p, {bool acceptPrivacyPolicy = false}) async {
+    final body = p.toApiMap(acceptPrivacyPolicy: acceptPrivacyPolicy);
     try {
-      await ApiClient.post('/api/users/me/profile', p.toApiMap());
+      await ApiClient.post('/api/users/me/profile', body);
     } on ApiException catch (e) {
       if (e.statusCode == 409 || e.statusCode == 400 || e.statusCode == 500) {
-        await ApiClient.put('/api/users/me/profile', p.toApiMap());
+        await ApiClient.put('/api/users/me/profile', body);
       } else {
         rethrow;
       }

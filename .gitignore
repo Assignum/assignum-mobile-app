@@ -43,7 +43,8 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
-# Keystore - NO subir al repositorionandroid/*.keystore
+# Gradle deja reportes y salidas de compilación aquí
+/android/build/
 
 # Keystore - NO subir al repositorio
 android/*.jks

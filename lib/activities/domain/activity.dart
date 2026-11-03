@@ -12,6 +12,10 @@ class Activity {
   final List<String> acceptedEmails;
   final Map<String, String> memberNames;
   final bool finalized;
+  /// 'ml', 'fallback' (reparto sin el servicio ML) o 'manual'; null si nunca se repartió.
+  final String? assignmentMode;
+
+  bool get assignedWithoutMl => assignmentMode == 'fallback';
 
   Activity({
     required this.id,
@@ -25,6 +29,7 @@ class Activity {
     this.acceptedEmails = const [],
     this.memberNames = const {},
     this.finalized = false,
+    this.assignmentMode,
   });
 
   factory Activity.fromMap(Map<String, dynamic> map) {
@@ -43,6 +48,7 @@ class Activity {
       acceptedEmails: List<String>.from(map['acceptedEmails'] ?? []),
       memberNames: Map<String, String>.from(map['memberNames'] ?? {}),
       finalized: map['finalized'] ?? false,
+      assignmentMode: map['assignmentMode'] as String?,
     );
   }
 }

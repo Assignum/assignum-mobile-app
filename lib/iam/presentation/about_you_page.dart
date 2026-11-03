@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:assignum/iam/infrastructure/user_service.dart';
 import 'package:assignum/iam/domain/user_profile.dart';
 import 'package:assignum/core/infrastructure/auth_session.dart';
+import 'package:assignum/iam/presentation/privacy_policy_page.dart';
 
 // ── Tokens ─────────────────────────────────────────────────────────────
 const _bg          = Color(0xFFF4F2EA);
@@ -40,6 +41,7 @@ class _AboutYouPageState extends State<AboutYouPage> {
   final _nameCtrl   = TextEditingController();
   DateTime? _birthDate;
   bool _saving = false;
+  bool _privacyAccepted = false;
 
   // ── Competencias Técnicas ──
   double _backend      = 3;
@@ -109,6 +111,11 @@ class _AboutYouPageState extends State<AboutYouPage> {
         const SnackBar(content: Text('Ingresa tu nombre completo')));
       return;
     }
+    if (!_privacyAccepted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Acepta el aviso de privacidad para continuar')));
+      return;
+    }
     setState(() => _saving = true);
 
     final profile = UserProfile(
@@ -133,7 +140,15 @@ class _AboutYouPageState extends State<AboutYouPage> {
       peerEvaluation:          _peerEval.round(),
     );
 
-    await _userService.createOrUpdateProfile(profile);
+    try {
+      await _userService.createOrUpdateProfile(profile, acceptPrivacyPolicy: true);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _saving = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudo guardar tu perfil: $e')));
+      return;
+    }
     if (!mounted) return;
     Navigator.of(context).pushNamedAndRemoveUntil('/home', (_) => false);
   }
@@ -156,6 +171,7 @@ class _AboutYouPageState extends State<AboutYouPage> {
                 children: [
                   IconButton(
                     icon: const Icon(Icons.arrow_back_rounded, color: _text),
+                    tooltip: 'Volver',
                     onPressed: () => Navigator.pop(context),
                     padding: EdgeInsets.zero,
                     constraints: const BoxConstraints(),
@@ -301,6 +317,15 @@ class _AboutYouPageState extends State<AboutYouPage> {
                           isLast: true),
                     ]),
 
+                    const SizedBox(height: 20),
+
+                    // ── Aviso de privacidad ────────────────────────────
+                    _sectionLabel('PRIVACIDAD'),
+                    PrivacyConsentCard(
+                      accepted: _privacyAccepted,
+                      onChanged: (v) => setState(() => _privacyAccepted = v),
+                    ),
+
                     const SizedBox(height: 8),
                   ],
                 ),
@@ -313,7 +338,7 @@ class _AboutYouPageState extends State<AboutYouPage> {
               child: SizedBox(
                 width: double.infinity, height: 52,
                 child: ElevatedButton(
-                  onPressed: _saving ? null : _save,
+                  onPressed: _saving || !_privacyAccepted ? null : _save,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: _primary,
                     foregroundColor: Colors.white,

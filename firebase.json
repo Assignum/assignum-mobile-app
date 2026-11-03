@@ -1,1 +1,24 @@
-{"flutter":{"platforms":{"android":{"default":{"projectId":"assignum-database","appId":"1:389968817022:android:a99815eb6cd2a802c4612f","fileOutput":"android/app/google-services.json"}},"dart":{"lib/firebase_options.dart":{"projectId":"assignum-database","configurations":{"android":"1:389968817022:android:a99815eb6cd2a802c4612f"}}}}}}
+{
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "assignum-database",
+          "appId": "1:389968817022:android:a99815eb6cd2a802c4612f",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "assignum-database",
+          "configurations": {
+            "android": "1:389968817022:android:a99815eb6cd2a802c4612f"
+          }
+        }
+      }
+    }
+  },
+  "firestore": {
+    "rules": "firestore.rules"
+  }
+}

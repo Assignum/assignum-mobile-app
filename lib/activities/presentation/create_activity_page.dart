@@ -72,7 +72,7 @@ class _CreateActivityPageState extends State<CreateActivityPage> {
       backgroundColor: _surface2,
       shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-      builder: (ctx) => _AddTaskSheet(
+      builder: (ctx) => AddTaskSheet(
         initialTask: _tasks[index],
         onAdd: (task) => setState(() => _tasks[index] = task),
       ),
@@ -120,7 +120,7 @@ class _CreateActivityPageState extends State<CreateActivityPage> {
       backgroundColor: _surface2,
       shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-      builder: (ctx) => _AddTaskSheet(
+      builder: (ctx) => AddTaskSheet(
         onAdd: (task) => setState(() => _tasks.add(task)),
       ),
     );
@@ -243,7 +243,7 @@ class _CreateActivityPageState extends State<CreateActivityPage> {
                         color: Colors.white.withValues(alpha: 0.08),
                         borderRadius: BorderRadius.circular(999),
                       ),
-                      child: const Icon(Icons.arrow_back_rounded,
+                      child: const Icon(Icons.arrow_back_rounded, semanticLabel: 'Volver',
                           color: Color(0xFFF6F3EA), size: 20),
                     ),
                   ),
@@ -450,17 +450,17 @@ class _CreateActivityPageState extends State<CreateActivityPage> {
 
 // ── Add task bottom sheet ──────────────────────────────────────────────
 
-class _AddTaskSheet extends StatefulWidget {
+class AddTaskSheet extends StatefulWidget {
   final void Function(ActivityTask task) onAdd;
   final ActivityTask? initialTask;
 
-  const _AddTaskSheet({required this.onAdd, this.initialTask});
+  const AddTaskSheet({super.key, required this.onAdd, this.initialTask});
 
   @override
-  State<_AddTaskSheet> createState() => _AddTaskSheetState();
+  State<AddTaskSheet> createState() => _AddTaskSheetState();
 }
 
-class _AddTaskSheetState extends State<_AddTaskSheet> {
+class _AddTaskSheetState extends State<AddTaskSheet> {
   final _nameCtrl = TextEditingController();
 
   String _taskType       = 'Backend';
@@ -786,7 +786,7 @@ class _TaskRow extends StatelessWidget {
             onTap: onEdit,
             child: const Padding(
               padding: EdgeInsets.all(4),
-              child: Icon(Icons.edit_outlined, size: 18, color: _text3),
+              child: Icon(Icons.edit_outlined, semanticLabel: 'Editar tarea', size: 18, color: _text3),
             ),
           ),
           const SizedBox(width: 8),
@@ -794,7 +794,7 @@ class _TaskRow extends StatelessWidget {
             onTap: onRemove,
             child: const Padding(
               padding: EdgeInsets.all(4),
-              child: Icon(Icons.close_rounded, size: 18, color: _text3),
+              child: Icon(Icons.close_rounded, semanticLabel: 'Quitar tarea', size: 18, color: _text3),
             ),
           ),
         ],

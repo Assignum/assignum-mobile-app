@@ -4,6 +4,8 @@ import 'package:assignum/core/infrastructure/auth_session.dart';
 import 'package:assignum/iam/infrastructure/user_service.dart';
 import 'package:assignum/iam/infrastructure/auth.dart';
 import 'package:assignum/iam/domain/user_profile.dart';
+import 'package:assignum/core/infrastructure/api_client.dart';
+import 'package:assignum/iam/presentation/privacy_policy_page.dart';
 
 // ── Tokens ─────────────────────────────────────────────────────────────
 const _bg          = Color(0xFFF4F2EA);
@@ -33,6 +35,7 @@ class _ProfilePageState extends State<ProfilePage> {
 
   bool _loading = true;
   bool _saving  = false;
+  bool _deleting = false;
   UserProfile? _profile;
 
   DateTime? _birthDate;
@@ -128,7 +131,20 @@ class _ProfilePageState extends State<ProfilePage> {
     );
 
     try {
-      await _userService.createOrUpdateProfile(updated);
+      // PUT: solo actualiza los campos enviados (el POST reemplazaría el documento)
+      await _userService.updateProfile(updated);
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      setState(() => _saving = false);
+      if (e.statusCode == 400 && e.message.contains('privacy policy')) {
+        // Aviso de privacidad pendiente: se pide aceptarlo y se reintenta
+        await Navigator.of(context).push(MaterialPageRoute(
+          builder: (ctx) => PrivacyReconsentPage(onAccepted: () => Navigator.pop(ctx)),
+        ));
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+      return;
     } catch (_) {
       if (!mounted) return;
       setState(() => _saving = false);
@@ -146,6 +162,57 @@ class _ProfilePageState extends State<ProfilePage> {
       behavior: SnackBarBehavior.floating,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
     ));
+  }
+
+  // ── Eliminar cuenta (derecho de cancelación) ────────────────────────
+
+  Future<void> _confirmDeleteAccount() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('¿Eliminar tu cuenta?'),
+        content: const Text(
+          'Se borrarán tu perfil, tus avisos y tu historial del asistente, y saldrás de '
+          'los grupos donde eres miembro. Tus tareas pendientes quedarán sin asignar. '
+          'Esta acción no se puede deshacer.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: TextButton.styleFrom(foregroundColor: _primary),
+            child: const Text('Eliminar definitivamente'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _deleting = true);
+    try {
+      await _userService.deleteAccount();
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      setState(() => _deleting = false);
+      final msg = e.statusCode == 409
+          ? 'Lideras actividades sin finalizar. Finalízalas o elimínalas antes de borrar tu cuenta.'
+          : 'No se pudo eliminar la cuenta: ${e.message}';
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+      return;
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _deleting = false);
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('No se pudo eliminar la cuenta. Revisa tu conexión e inténtalo de nuevo.')));
+      return;
+    }
+    // La cuenta ya no existe en Firebase Auth: se limpia la sesión local
+    try { await Auth().signOut(); } catch (_) {}
+    if (!mounted) return;
+    Navigator.of(context).pushNamedAndRemoveUntil('/', (_) => false);
   }
 
   Future<void> _logout() async {
@@ -375,6 +442,36 @@ class _ProfilePageState extends State<ProfilePage> {
                         isLast: true),
                   ]),
 
+                  const SizedBox(height: 20),
+
+                  // ── Privacidad y cuenta ────────────────────────────
+                  _sectionLabel('PRIVACIDAD Y CUENTA'),
+                  _card(children: [
+                    ListTile(
+                      leading: const Icon(Icons.shield_outlined, color: _primary),
+                      title: Text('Aviso de privacidad',
+                          style: GoogleFonts.hankenGrotesk(
+                              fontSize: 14, fontWeight: FontWeight.w600, color: _text)),
+                      trailing: const Icon(Icons.chevron_right_rounded, color: _text3),
+                      onTap: () => Navigator.of(context).push(
+                          MaterialPageRoute(builder: (_) => const PrivacyPolicyPage())),
+                    ),
+                    _divider(),
+                    ListTile(
+                      leading: _deleting
+                          ? const SizedBox(
+                              width: 24, height: 24,
+                              child: CircularProgressIndicator(strokeWidth: 2, color: _primary))
+                          : const Icon(Icons.delete_forever_outlined, color: _primary),
+                      title: Text('Eliminar mi cuenta',
+                          style: GoogleFonts.hankenGrotesk(
+                              fontSize: 14, fontWeight: FontWeight.w600, color: _primary)),
+                      subtitle: Text('Borra tu perfil y tus datos de Assignum',
+                          style: GoogleFonts.hankenGrotesk(fontSize: 12.5, color: _text2)),
+                      onTap: _deleting ? null : _confirmDeleteAccount,
+                    ),
+                  ]),
+
                   const SizedBox(height: 8),
                 ],
               ),
@@ -585,6 +682,7 @@ class _ProfileAppBar extends StatelessWidget {
         children: [
           IconButton(
             icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
+            tooltip: 'Volver',
             onPressed: onBack,
           ),
           Expanded(
@@ -592,16 +690,21 @@ class _ProfileAppBar extends StatelessWidget {
                 style: GoogleFonts.hankenGrotesk(
                     fontSize: 19, fontWeight: FontWeight.w700, color: Colors.white)),
           ),
-          GestureDetector(
+          Semantics(
+            button: true,
+            label: 'Cerrar sesión',
+            excludeSemantics: true,
+            child: GestureDetector(
             onTap: onLogout,
             child: Container(
-              width: 40, height: 40,
+              width: 48, height: 48,
               decoration: BoxDecoration(
                 color: Colors.white.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: const Icon(Icons.logout_rounded, color: Colors.white, size: 20),
             ),
+          ),
           ),
         ],
       ),

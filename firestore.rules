@@ -1,0 +1,77 @@
+rules_version = '2';
+
+// Reglas de seguridad de Firestore para Assignum.
+//
+// El backend usa Firebase Admin SDK, que ignora estas reglas: todas las escrituras de
+// negocio (actividades, tareas, perfil, bandeja, chat) pasan por la API, que valida
+// permisos. La app solo lee `activities` en tiempo real y guarda su token FCM en su
+// propio documento de `users`; eso es lo único que estas reglas permiten al cliente.
+//
+// Desplegar: firebase deploy --only firestore:rules
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function myEmail() {
+      return request.auth.token.email;
+    }
+
+    function isLeader(activity) {
+      return activity.uid == request.auth.uid;
+    }
+
+    function isMember(activity) {
+      return myEmail() in activity.acceptedEmails;
+    }
+
+    function isInvited(activity) {
+      return myEmail() in activity.invitedEmails;
+    }
+
+    // Perfil del usuario: el perfil se lee y se edita por la API. Desde la app solo se
+    // permite registrar o borrar el token de notificaciones push del propio usuario.
+    match /users/{userId} {
+      function isOwner() {
+        return signedIn() && request.auth.uid == userId;
+      }
+
+      allow read: if isOwner();
+
+      allow create: if isOwner()
+        && request.resource.data.keys().hasOnly(['email', 'fcmToken'])
+        && request.resource.data.email == myEmail();
+
+      allow update: if isOwner()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['email', 'fcmToken'])
+        && (!('email' in request.resource.data) || request.resource.data.email == myEmail());
+
+      allow delete: if false;
+
+      // Historial del asistente: solo lo escribe el backend.
+      match /chatHistory/{messageId} {
+        allow read, write: if false;
+      }
+    }
+
+    // Actividades: las ven el líder, los miembros aceptados y los invitados (para poder
+    // revisar la invitación). Toda escritura pasa por la API.
+    match /activities/{activityId} {
+      allow read: if signedIn()
+        && (isLeader(resource.data) || isMember(resource.data) || isInvited(resource.data));
+      allow write: if false;
+    }
+
+    // Bandeja de avisos: la sirve la API (GET /api/notifications).
+    match /inbox/{itemId} {
+      allow read, write: if false;
+    }
+
+    // Cualquier otra colección queda cerrada al cliente.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

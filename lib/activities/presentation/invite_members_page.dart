@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:assignum/activities/infrastructure/activity_service.dart';
 import 'package:assignum/activities/domain/activity.dart';
+import 'package:assignum/activities/domain/auth_facade.dart';
 import 'package:assignum/activities/presentation/activity_details_page.dart';
 
 // ── Tokens ─────────────────────────────────────────────────────────────
@@ -23,7 +24,16 @@ const _avatarPalette = [
 
 class InviteMembersPage extends StatefulWidget {
   final Activity activity;
-  const InviteMembersPage({super.key, required this.activity});
+
+  /// true: paso del asistente de creación (al terminar abre los detalles).
+  /// false: invitación posterior desde los detalles (al terminar vuelve atrás).
+  final bool isCreationFlow;
+
+  const InviteMembersPage({
+    super.key,
+    required this.activity,
+    this.isCreationFlow = true,
+  });
 
   @override
   State<InviteMembersPage> createState() => _InviteMembersPageState();
@@ -68,11 +78,26 @@ class _InviteMembersPageState extends State<InviteMembersPage> {
   Color _avatarColor(String email) =>
       _avatarPalette[email.codeUnitAt(0) % _avatarPalette.length];
 
+  void _showSnack(String msg) => ScaffoldMessenger.of(context)
+      .showSnackBar(SnackBar(content: Text(msg)));
+
   void _addEmail() {
-    final text = _emailCtrl.text.trim();
+    final text = _emailCtrl.text.trim().toLowerCase();
     if (!_isValidEmail(text)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Ingresa un correo electrónico válido')));
+      _showSnack('Ingresa un correo electrónico válido');
+      return;
+    }
+    final myEmail = IAuthFacade.instance.currentUserEmail?.toLowerCase();
+    if (text == myEmail) {
+      _showSnack('No puedes invitarte a ti mismo');
+      return;
+    }
+    if (widget.activity.acceptedEmails.contains(text)) {
+      _showSnack('$text ya es miembro del grupo');
+      return;
+    }
+    if (widget.activity.invitedEmails.contains(text)) {
+      _showSnack('$text ya tiene una invitación pendiente');
       return;
     }
     if (!_emails.contains(text)) {
@@ -90,23 +115,35 @@ class _InviteMembersPageState extends State<InviteMembersPage> {
 
   // ── Submit ───────────────────────────────────────────────────────────
 
+  void _goToDetails(Activity activity) {
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ActivityDetailsPage(
+            activity: activity, isCreationFlow: true),
+      ),
+    );
+  }
+
   Future<void> _submit() async {
     if (_emails.isEmpty) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (_) => ActivityDetailsPage(
-              activity: widget.activity, isCreationFlow: true),
-        ),
-      );
+      if (widget.isCreationFlow) _goToDetails(widget.activity);
       return;
     }
 
     setState(() => _saving = true);
     try {
-      await ActivityService().inviteMembers(widget.activity.id, _emails);
+      final failures =
+          await ActivityService().inviteMembers(widget.activity.id, List.of(_emails));
       if (!mounted) return;
-      showDialog(
+      final sent = _emails.length - failures.length;
+
+      // Los correos que fallaron se quedan en la lista para corregirlos o quitarlos.
+      setState(() => _emails.removeWhere((e) => !failures.containsKey(e)));
+
+      // Si nada se envió, el usuario se queda en la pantalla para corregir.
+      final canContinue = sent > 0;
+      await showDialog(
         context: context,
         barrierDismissible: false,
         builder: (ctx) => Dialog(
@@ -124,41 +161,49 @@ class _InviteMembersPageState extends State<InviteMembersPage> {
                     color: _primaryTint,
                     borderRadius: BorderRadius.circular(999),
                   ),
-                  child: const Icon(Icons.mark_email_read_outlined,
+                  child: Icon(
+                      canContinue
+                          ? Icons.mark_email_read_outlined
+                          : Icons.error_outline_rounded,
                       color: _primary, size: 30),
                 ),
                 const SizedBox(height: 16),
-                Text('Invitaciones enviadas',
+                Text(canContinue ? 'Invitaciones enviadas' : 'No se pudo invitar',
                     style: GoogleFonts.hankenGrotesk(
                         fontSize: 18, fontWeight: FontWeight.w700,
                         color: _text)),
                 const SizedBox(height: 8),
-                Text(_emails.length == 1
-                        ? '1 compañero ha sido invitado.'
-                        : '${_emails.length} compañeros han sido invitados.',
-                    textAlign: TextAlign.center,
-                    style: GoogleFonts.hankenGrotesk(
-                        fontSize: 14, color: _text2)),
+                if (canContinue)
+                  Text(sent == 1
+                          ? '1 compañero ha sido invitado.'
+                          : '$sent compañeros han sido invitados.',
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.hankenGrotesk(
+                          fontSize: 14, color: _text2)),
+                if (failures.isNotEmpty) ...[
+                  const SizedBox(height: 14),
+                  ...failures.entries.map((f) => Padding(
+                        padding: const EdgeInsets.only(bottom: 6),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Icon(Icons.close_rounded,
+                                size: 16, color: _primary),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text('${f.key}: ${f.value}',
+                                  style: GoogleFonts.hankenGrotesk(
+                                      fontSize: 13, color: _text2)),
+                            ),
+                          ],
+                        ),
+                      )),
+                ],
                 const SizedBox(height: 24),
                 SizedBox(
                   width: double.infinity, height: 48,
                   child: ElevatedButton(
-                    onPressed: () async {
-                      Navigator.pop(ctx);
-                      final updated = await ActivityService()
-                          .getActivity(widget.activity.id);
-                      if (mounted) {
-                        Navigator.pushReplacement(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => ActivityDetailsPage(
-                              activity: updated ?? widget.activity,
-                              isCreationFlow: true,
-                            ),
-                          ),
-                        );
-                      }
-                    },
+                    onPressed: () => Navigator.pop(ctx),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: _primary,
                       foregroundColor: Colors.white,
@@ -166,7 +211,7 @@ class _InviteMembersPageState extends State<InviteMembersPage> {
                           borderRadius: BorderRadius.circular(999)),
                       elevation: 0,
                     ),
-                    child: Text('Continuar',
+                    child: Text(canContinue ? 'Continuar' : 'Corregir',
                         style: GoogleFonts.hankenGrotesk(
                             fontWeight: FontWeight.w600)),
                   ),
@@ -176,11 +221,16 @@ class _InviteMembersPageState extends State<InviteMembersPage> {
           ),
         ),
       );
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Error: $e')));
+      if (!mounted || !canContinue) return;
+
+      if (widget.isCreationFlow) {
+        final updated = await ActivityService().getActivity(widget.activity.id);
+        if (mounted) _goToDetails(updated ?? widget.activity);
+      } else {
+        Navigator.pop(context, true);
       }
+    } catch (e) {
+      if (mounted) _showSnack('Error: $e');
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -296,7 +346,7 @@ class _InviteMembersPageState extends State<InviteMembersPage> {
                     color: Colors.white.withValues(alpha: 0.08),
                     borderRadius: BorderRadius.circular(999),
                   ),
-                  child: const Icon(Icons.arrow_back_rounded,
+                  child: const Icon(Icons.arrow_back_rounded, semanticLabel: 'Volver',
                       color: Color(0xFFF6F3EA), size: 20),
                 ),
               ),
@@ -378,8 +428,9 @@ class _InviteMembersPageState extends State<InviteMembersPage> {
   Widget _buildBottomBar() {
     final count = _emails.length;
     final label = count == 0
-        ? 'Continuar sin invitar'
-        : 'Enviar $count invitación${count == 1 ? '' : 'es'}';
+        ? (widget.isCreationFlow ? 'Continuar sin invitar' : 'Añade al menos un correo')
+        : 'Enviar $count ${count == 1 ? 'invitación' : 'invitaciones'}';
+    final enabled = !_saving && (count > 0 || widget.isCreationFlow);
 
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
@@ -390,10 +441,12 @@ class _InviteMembersPageState extends State<InviteMembersPage> {
         child: SizedBox(
           width: double.infinity, height: 52,
           child: ElevatedButton(
-            onPressed: _saving ? null : _submit,
+            onPressed: enabled ? _submit : null,
             style: ElevatedButton.styleFrom(
               backgroundColor: count > 0 ? _primary : _surfaceInset,
               foregroundColor: count > 0 ? Colors.white : _text3,
+              disabledBackgroundColor: _surfaceInset,
+              disabledForegroundColor: _text3,
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(999)),
               elevation: 0,
@@ -461,7 +514,7 @@ class _EmailTile extends StatelessWidget {
           ),
           GestureDetector(
             onTap: onRemove,
-            child: const Icon(Icons.close_rounded,
+            child: const Icon(Icons.close_rounded, semanticLabel: 'Quitar correo',
                 size: 18, color: Color(0xFF9A978C)),
           ),
         ],

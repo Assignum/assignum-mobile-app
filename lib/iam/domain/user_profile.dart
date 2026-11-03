@@ -1,3 +1,5 @@
+import 'package:assignum/iam/domain/privacy_policy.dart';
+
 class UserProfile {
   final String uid;
   final String fullName;
@@ -25,6 +27,9 @@ class UserProfile {
   final int lastRolePerformance;
   final int peerEvaluation;
 
+  /// true si el usuario aún no aceptó la versión vigente del aviso de privacidad.
+  final bool consentRequired;
+
   UserProfile({
     required this.uid,
     required this.fullName,
@@ -45,9 +50,11 @@ class UserProfile {
     this.lastRole = 'Frontend',
     this.lastRolePerformance = 3,
     this.peerEvaluation = 3,
+    this.consentRequired = false,
   });
 
-  Map<String, dynamic> toApiMap() => {
+  /// Con [acceptPrivacyPolicy] se envía la aceptación de la versión vigente del aviso.
+  Map<String, dynamic> toApiMap({bool acceptPrivacyPolicy = false}) => {
     'fullName': fullName,
     if (birthDate != null)
       'birthDate': birthDate!.toIso8601String().split('T')[0],
@@ -67,6 +74,12 @@ class UserProfile {
     'lastRole': lastRole,
     'lastRolePerformance': lastRolePerformance,
     'peerEvaluation': peerEvaluation,
+    if (acceptPrivacyPolicy) 'privacyConsent': privacyConsentPayload,
+  };
+
+  static const privacyConsentPayload = {
+    'accepted': true,
+    'version': privacyPolicyVersion,
   };
 
   static UserProfile fromMap(Map<String, dynamic> m) => UserProfile(
@@ -91,6 +104,7 @@ class UserProfile {
     lastRole:    m['lastRole'] as String? ?? 'Frontend',
     lastRolePerformance: _int(m, 'lastRolePerformance'),
     peerEvaluation:      _int(m, 'peerEvaluation'),
+    consentRequired: m['consentRequired'] as bool? ?? false,
   );
 
   static int _int(Map<String, dynamic> m, String key, {int def = 3}) =>

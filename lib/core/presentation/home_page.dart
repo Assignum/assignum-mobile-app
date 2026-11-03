@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:assignum/core/infrastructure/auth_session.dart';
+import 'package:assignum/core/infrastructure/notification_service.dart';
 import 'package:assignum/iam/infrastructure/user_service.dart';
 import 'package:assignum/iam/domain/user_profile.dart';
 import 'package:assignum/iam/infrastructure/auth.dart';
@@ -29,17 +30,48 @@ class HomePage extends StatefulWidget {
   State<HomePage> createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage> {
+class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   final _scaffoldKey = GlobalKey<ScaffoldState>();
   final _userService = UserService();
   final _activityService = ActivityService();
   late final Stream<int> _invitationCountStream;
+  int _unreadInbox = 0;
 
   @override
   void initState() {
     super.initState();
     _invitationCountStream =
         _activityService.getPendingInvitationsCountStream();
+    _refreshUnreadInbox();
+    NotificationService.pushReceived.addListener(_refreshUnreadInbox);
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    NotificationService.pushReceived.removeListener(_refreshUnreadInbox);
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _refreshUnreadInbox();
+  }
+
+  Future<void> _refreshUnreadInbox() async {
+    try {
+      final n = await _activityService.getUnreadInboxCount();
+      if (mounted) setState(() => _unreadInbox = n);
+    } catch (_) {
+      // Sin conexión: se mantiene el último valor conocido
+    }
+  }
+
+  Future<void> _openNotifications() async {
+    await Navigator.push(
+        context, MaterialPageRoute(builder: (_) => const NotificationsPage()));
+    _refreshUnreadInbox();
   }
 
   String _getGreeting() {
@@ -58,8 +90,10 @@ class _HomePageState extends State<HomePage> {
     return (parts[0][0] + parts[1][0]).toUpperCase();
   }
 
-  void _go(Widget page) =>
-      Navigator.push(context, MaterialPageRoute(builder: (_) => page));
+  Future<void> _go(Widget page) async {
+    await Navigator.push(context, MaterialPageRoute(builder: (_) => page));
+    _refreshUnreadInbox();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -97,7 +131,7 @@ class _HomePageState extends State<HomePage> {
             return StreamBuilder<int>(
               stream: _invitationCountStream,
               builder: (context, invSnap) {
-                final invCount = invSnap.data ?? 0;
+                final invCount = (invSnap.data ?? 0) + _unreadInbox;
                 return Scaffold(
               key: _scaffoldKey,
               backgroundColor: _bg,
@@ -115,7 +149,7 @@ class _HomePageState extends State<HomePage> {
                     initials: initials,
                     onMenuTap: () => _scaffoldKey.currentState?.openDrawer(),
                     onNotificationTap: () =>
-                        _go(const NotificationsPage()),
+                        _openNotifications(),
                     onAvatarTap: () => _go(const ProfilePage()),
                     hasPendingNotifications: invCount > 0,
                   ),
@@ -157,7 +191,7 @@ class _HomePageState extends State<HomePage> {
                             iconColor: const Color(0xFF4A8C6A),
                             value: '$invCount',
                             label: 'Notificaciones',
-                            onTap: () => _go(const NotificationsPage()),
+                            onTap: () => _openNotifications(),
                           ),
                         ),
                       ],
@@ -288,6 +322,7 @@ class _HomePageState extends State<HomePage> {
                       ),
                     ),
                     IconButton(
+                      tooltip: 'Cerrar',
                       icon: const Icon(Icons.close_rounded,
                           color: Colors.white70),
                       onPressed: () => Navigator.pop(context),
@@ -328,7 +363,7 @@ class _HomePageState extends State<HomePage> {
             label: 'Notificaciones',
             onTap: () {
               Navigator.pop(context);
-              _go(const NotificationsPage());
+              _openNotifications();
             },
           ),
           const Spacer(),

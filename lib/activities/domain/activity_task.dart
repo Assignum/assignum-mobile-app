@@ -27,6 +27,9 @@ class ActivityTask {
     this.estimatedHours = 5,
   });
 
+  /// Entregada o verificada: ya no se redistribuye ni se reasigna, pero cuenta como carga.
+  bool get isCompleted => status == 'Entregado' || status == 'Verificado';
+
   ActivityTask copyWith({
     String? id,
     String? name,

@@ -6,6 +6,7 @@ import 'package:assignum/core/infrastructure/api_client.dart';
 import 'package:assignum/core/infrastructure/auth_session.dart';
 import 'package:assignum/activities/domain/activity.dart';
 import 'package:assignum/activities/domain/activity_task.dart';
+import 'package:assignum/activities/domain/inbox_item.dart';
 
 class ActivityService {
   static Activity _fromDoc(DocumentSnapshot doc) {
@@ -63,94 +64,7 @@ class ActivityService {
     }
   }
 
-  // ── Firestore direct writes (instant, bypasses slow backend) ─────────────────
-
-  /// Updates task fields directly in Firestore. Fast and real-time for all devices.
-  /// Also fires a background REST call to keep backend stats in sync.
-  Future<void> updateTaskDirectly(
-    String activityId,
-    String taskId, {
-    required String status,
-    required String comments,
-    required String files,
-    required String links,
-  }) async {
-    final filesList = files.trim().isEmpty
-        ? <String>[]
-        : files.split('\n').where((s) => s.trim().isNotEmpty).toList();
-    final linksList = links.trim().isEmpty
-        ? <String>[]
-        : links.split('\n').where((s) => s.trim().isNotEmpty).toList();
-
-    final actRef = FirebaseFirestore.instance.collection('activities').doc(activityId);
-    await FirebaseFirestore.instance.runTransaction((tx) async {
-      final snap = await tx.get(actRef);
-      if (!snap.exists) return;
-      final tasks = List<dynamic>.from(
-          (snap.data() as Map<String, dynamic>)['tasks'] ?? []);
-      final idx = tasks.indexWhere(
-          (t) => (t as Map)['id']?.toString() == taskId);
-      if (idx == -1) return;
-      final task = Map<String, dynamic>.from(tasks[idx] as Map);
-      task['status']   = status;
-      task['comments'] = comments;
-      task['files']    = filesList;
-      task['links']    = linksList;
-      tasks[idx] = task;
-      tx.update(actRef, {'tasks': tasks});
-    });
-
-    // Keep backend DB in sync in background (for dashboard stats)
-    ApiClient.put('/api/activities/$activityId/tasks/$taskId', {
-      'status': status,
-      'comments': comments,
-      'files': filesList,
-      'links': linksList,
-    }).catchError((_) {});
-  }
-
-  /// Sets task status to Verificado directly in Firestore.
-  Future<void> verifyTaskDirectly(String activityId, String taskId) async {
-    final actRef = FirebaseFirestore.instance.collection('activities').doc(activityId);
-    await FirebaseFirestore.instance.runTransaction((tx) async {
-      final snap = await tx.get(actRef);
-      if (!snap.exists) return;
-      final tasks = List<dynamic>.from(
-          (snap.data() as Map<String, dynamic>)['tasks'] ?? []);
-      final idx = tasks.indexWhere(
-          (t) => (t as Map)['id']?.toString() == taskId);
-      if (idx == -1) return;
-      final task = Map<String, dynamic>.from(tasks[idx] as Map);
-      task['status'] = 'Verificado';
-      tasks[idx] = task;
-      tx.update(actRef, {'tasks': tasks});
-    });
-
-    // Keep backend in sync in background
-    ApiClient.post('/api/activities/$activityId/tasks/$taskId/verify')
-        .catchError((_) {});
-  }
-
   // ── Activities REST ──────────────────────────────────────────────────────────
-
-  Future<List<Activity>> getActivities() async {
-    final list = await ApiClient.get('/api/activities') as List<dynamic>;
-    return list.map((e) => Activity.fromMap(e as Map<String, dynamic>)).toList();
-  }
-
-  Future<Map<String, String>> getActivityMembers(String activityId) async {
-    try {
-      final data = await ApiClient.get('/api/activities/$activityId/members') as Map<String, dynamic>;
-      final members = data['members'] as List<dynamic>? ?? [];
-      return {
-        for (final m in members)
-          if (m['uid'] != null && m['name'] != null)
-            m['uid'] as String: m['name'] as String,
-      };
-    } catch (_) {
-      return {};
-    }
-  }
 
   Future<Activity?> getActivity(String id) async {
     try {
@@ -185,6 +99,30 @@ class ActivityService {
     return activity;
   }
 
+  /// Edita nombre, fecha límite o enlace (solo líder). Cambiar la fecha avisa a los miembros.
+  Future<void> updateActivity(
+    String id, {
+    String? name,
+    DateTime? dueDate,
+    String? documentLink,
+  }) async {
+    await ApiClient.put('/api/activities/$id', {
+      if (name != null) 'name': name,
+      if (dueDate != null) 'dueDate': dueDate.toIso8601String().split('T')[0],
+      if (documentLink != null) 'documentLink': documentLink.isEmpty ? null : documentLink,
+    });
+  }
+
+  /// Un miembro sale de la actividad; sus tareas sin terminar quedan sin asignar.
+  Future<void> leaveActivity(String id) async {
+    await ApiClient.post('/api/activities/$id/leave');
+  }
+
+  /// El líder cede el liderazgo a un miembro aceptado y pasa a ser miembro.
+  Future<void> transferLeadership(String id, String newLeaderEmail) async {
+    await ApiClient.post('/api/activities/$id/leader', {'email': newLeaderEmail});
+  }
+
   Future<void> deleteActivity(String id) async {
     await ApiClient.delete('/api/activities/$id');
   }
@@ -193,7 +131,10 @@ class ActivityService {
     await ApiClient.post('/api/activities/$id/finalize');
   }
 
-  // ── Tasks REST (kept for non-direct operations) ──────────────────────────────
+  // ── Tasks REST ──────────────────────────────────────────────────────────────
+  // Todas las escrituras de tareas pasan por el backend: valida permisos y guarda en una
+  // transacción, así dos miembros que actualizan a la vez no se pisan. Los errores se
+  // propagan para que la pantalla los muestre; la UI se actualiza sola por el stream.
 
   Future<void> updateTask(
     String activityId,
@@ -219,25 +160,114 @@ class ActivityService {
     await ApiClient.put('/api/activities/$activityId/tasks/$taskId', body);
   }
 
+  /// Corrige la definición de una tarea (nombre, tipo, complejidad, prioridad, horas).
+  Future<void> editTask(String activityId, String taskId, ActivityTask task) async {
+    await ApiClient.patch('/api/activities/$activityId/tasks/$taskId', task.toCreationMap());
+  }
+
+  Future<void> deleteTask(String activityId, String taskId) async {
+    await ApiClient.delete('/api/activities/$activityId/tasks/$taskId');
+  }
+
   Future<void> verifyTask(String activityId, String taskId) async {
     await ApiClient.post('/api/activities/$activityId/tasks/$taskId/verify');
   }
 
+  /// Reparto inicial de tareas ("Dividir tareas").
   Future<void> assignTasks(String activityId) async {
     await ApiClient.post('/api/activities/$activityId/tasks/assign');
   }
 
+  Future<List<ActivityTask>> addTasks(String activityId, List<ActivityTask> tasks) async {
+    final list = await ApiClient.post('/api/activities/$activityId/tasks', {
+      'tasks': tasks.map((t) => t.toCreationMap()).toList(),
+    }) as List<dynamic>;
+    return list.map((e) => ActivityTask.fromMap(e as Map<String, dynamic>)).toList();
+  }
+
+  /// Propuesta (sin guardar) de cómo repartir [taskIds] entre [memberEmails],
+  /// considerando la carga previa de cada uno. Devuelve taskId → email y si se
+  /// calculó sin el servicio ML ([usedFallback]).
+  Future<({Map<String, String> assignments, bool usedFallback})> previewRedistribution(
+    String activityId, {
+    required List<String> taskIds,
+    required List<String> memberEmails,
+  }) async {
+    final data = await ApiClient.post(
+      '/api/activities/$activityId/tasks/redistribute/preview',
+      {'taskIds': taskIds, 'memberEmails': memberEmails},
+    ) as Map<String, dynamic>;
+    return (
+      assignments: {
+        for (final a in data['assignments'] as List<dynamic>)
+          (a as Map)['taskId'] as String: a['assignedToEmail'] as String,
+      },
+      usedFallback: data['assignmentMode'] == 'fallback',
+    );
+  }
+
+  /// Asigna tareas a estudiantes concretos (taskId → email, o null para dejarla sin asignar).
+  /// [assignmentMode] indica de dónde salió el reparto: 'ml' o 'fallback' si es la
+  /// propuesta de [previewRedistribution]; por defecto es un cambio manual.
+  Future<void> applyAssignments(String activityId, Map<String, String?> assignments,
+      {String assignmentMode = 'manual'}) async {
+    await ApiClient.put('/api/activities/$activityId/tasks/assignments', {
+      'assignments': assignments.entries
+          .map((e) => {'taskId': e.key, 'assignedToEmail': e.value})
+          .toList(),
+      'assignmentMode': assignmentMode,
+    });
+  }
+
   // ── Members & Invitations ────────────────────────────────────────────────────
 
-  Future<void> inviteMembers(String activityId, List<String> emails) async {
+  /// Invita a cada correo de forma independiente para que un correo inválido no
+  /// bloquee al resto. Devuelve los correos que fallaron con su motivo.
+  Future<Map<String, String>> inviteMembers(String activityId, List<String> emails) async {
+    final failures = <String, String>{};
     for (final email in emails) {
-      await ApiClient.post('/api/activities/$activityId/invitations', {'email': email});
+      try {
+        await ApiClient.post('/api/activities/$activityId/invitations', {'email': email});
+      } on ApiException catch (e) {
+        failures[email] = _inviteErrorMessage(e);
+      } catch (_) {
+        failures[email] = 'Error de conexión';
+      }
     }
+    return failures;
+  }
+
+  static String _inviteErrorMessage(ApiException e) {
+    final msg = e.message.toLowerCase();
+    if (msg.contains('does not exist')) return 'No tiene cuenta en Assignum';
+    if (msg.contains('already invited')) return 'Ya está en el grupo o invitado';
+    if (msg.contains('yourself')) return 'No puedes invitarte a ti mismo';
+    if (msg.contains('finalized')) return 'La actividad ya fue finalizada';
+    return e.message;
   }
 
   Future<List<Map<String, dynamic>>> getPendingInvitations() async {
     final list = await ApiClient.get('/api/notifications') as List<dynamic>;
     return list.map((e) => e as Map<String, dynamic>).toList();
+  }
+
+  /// Quita a un miembro. Devuelve los ids de sus tareas que quedaron sin asignar.
+  Future<List<String>> removeMember(String activityId, String email) async {
+    final data = await ApiClient.delete(
+        '/api/activities/$activityId/members/${Uri.encodeComponent(email)}') as Map<String, dynamic>;
+    return List<String>.from(data['unassignedTaskIds'] ?? []);
+  }
+
+  /// Cancela una invitación pendiente. Devuelve los ids de las tareas que quedaron sin asignar.
+  Future<List<String>> cancelInvitation(String activityId, String email) async {
+    final data = await ApiClient.delete(
+        '/api/activities/$activityId/invitations/${Uri.encodeComponent(email)}') as Map<String, dynamic>;
+    return List<String>.from(data['unassignedTaskIds'] ?? []);
+  }
+
+  Future<void> resendInvitation(String activityId, String email) async {
+    await ApiClient.post(
+        '/api/activities/$activityId/invitations/${Uri.encodeComponent(email)}/resend');
   }
 
   Future<void> acceptInvitation(String activityId) async {
@@ -248,15 +278,20 @@ class ActivityService {
     await ApiClient.post('/api/activities/$activityId/invitations/decline');
   }
 
-  // ── Dashboard ────────────────────────────────────────────────────────────────
+  // ── Bandeja de avisos ───────────────────────────────────────────────────────
 
-  Future<Map<String, int>> getDashboardStats() async {
-    final data = await ApiClient.get('/api/dashboard/stats') as Map<String, dynamic>;
-    return {
-      'totalActivities': (data['totalActivities'] as num?)?.toInt() ?? 0,
-      'pendingTasks': (data['pendingTasks'] as num?)?.toInt() ?? 0,
-      'upcomingActivities': (data['upcomingActivities'] as num?)?.toInt() ?? 0,
-    };
+  Future<List<InboxItem>> getInbox() async {
+    final list = await ApiClient.get('/api/notifications/inbox') as List<dynamic>;
+    return list.map((e) => InboxItem.fromMap(e as Map<String, dynamic>)).toList();
+  }
+
+  Future<int> getUnreadInboxCount() async {
+    final items = await getInbox();
+    return items.where((i) => !i.read).length;
+  }
+
+  Future<void> markInboxRead() async {
+    await ApiClient.post('/api/notifications/inbox/read');
   }
 
   // ── File upload (Cloudinary) ──────────────────────────────────────────────────

@@ -7,9 +7,10 @@ import 'package:assignum/iam/presentation/welcome_page.dart';
 import 'package:assignum/core/presentation/home_page.dart';
 import 'package:assignum/iam/infrastructure/user_service.dart';
 import 'package:assignum/iam/presentation/about_you_page.dart';
+import 'package:assignum/iam/presentation/privacy_policy_page.dart';
 
 // Result of profile check
-enum _ProfileStatus { hasProfile, noProfile, networkError, authError }
+enum _ProfileStatus { hasProfile, noProfile, needsConsent, networkError, authError }
 
 class WidgetTree extends StatelessWidget {
   const WidgetTree({super.key});
@@ -21,10 +22,14 @@ class WidgetTree extends StatelessWidget {
       return _ProfileStatus.authError;
     }
     try {
-      final exists = await UserService()
-          .profileExists()
+      final profile = await UserService()
+          .getProfile()
           .timeout(const Duration(seconds: 25));
-      return exists ? _ProfileStatus.hasProfile : _ProfileStatus.noProfile;
+      // Sin perfil o con el onboarding sin terminar → "Sobre ti" (incluye el aviso)
+      if (profile == null || profile.fullName.isEmpty) return _ProfileStatus.noProfile;
+      // Cuenta anterior al aviso o aviso actualizado → pedir la aceptación
+      if (profile.consentRequired) return _ProfileStatus.needsConsent;
+      return _ProfileStatus.hasProfile;
     } on ApiException catch (e) {
       if (e.statusCode == 401 || e.statusCode == 403) return _ProfileStatus.authError;
       return _ProfileStatus.networkError;
@@ -67,6 +72,11 @@ class WidgetTree extends StatelessWidget {
                 return const HomePage();
               case _ProfileStatus.noProfile:
                 return const AboutYouPage(cameFromRegister: false);
+              case _ProfileStatus.needsConsent:
+                return PrivacyReconsentPage(
+                  onAccepted: () => Navigator.of(context)
+                      .pushNamedAndRemoveUntil('/', (_) => false),
+                );
               case _ProfileStatus.authError:
                 // Token expirado — limpiar sesión y volver al login
                 Auth().signOut();

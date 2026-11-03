@@ -85,7 +85,7 @@ class _ActivitiesListPageState extends State<ActivitiesListPage> {
                   color: Colors.white.withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(999),
                 ),
-                child: const Icon(Icons.search_rounded,
+                child: const Icon(Icons.search_rounded, semanticLabel: 'Buscar actividades',
                     color: Colors.white, size: 20),
               ),
             ),
@@ -444,7 +444,7 @@ class _ActivityCard extends StatelessWidget {
                         const SizedBox(width: 6),
                         GestureDetector(
                           onTap: onDelete,
-                          child: const Icon(Icons.delete_outline_rounded,
+                          child: const Icon(Icons.delete_outline_rounded, semanticLabel: 'Eliminar actividad',
                               size: 18, color: _text3),
                         ),
                       ],
