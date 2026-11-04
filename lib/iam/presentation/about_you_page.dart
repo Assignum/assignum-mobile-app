@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:assignum/iam/infrastructure/user_service.dart';
 import 'package:assignum/iam/domain/user_profile.dart';
 import 'package:assignum/core/infrastructure/auth_session.dart';
+import 'package:assignum/iam/infrastructure/auth.dart';
 import 'package:assignum/iam/presentation/privacy_policy_page.dart';
 
 // ── Tokens ─────────────────────────────────────────────────────────────
@@ -153,6 +154,14 @@ class _AboutYouPageState extends State<AboutYouPage> {
     Navigator.of(context).pushNamedAndRemoveUntil('/home', (_) => false);
   }
 
+  // Sin perfil no se puede usar la app: volver es salir de la sesión. Un pop dejaría
+  // la pantalla en negro cuando esta página es la raíz (usuario sin onboarding al abrir).
+  Future<void> _leave() async {
+    await Auth().signOut();
+    if (!mounted) return;
+    Navigator.of(context).pushNamedAndRemoveUntil('/', (_) => false);
+  }
+
   // ── Build ────────────────────────────────────────────────────────────
 
   @override
@@ -172,7 +181,7 @@ class _AboutYouPageState extends State<AboutYouPage> {
                   IconButton(
                     icon: const Icon(Icons.arrow_back_rounded, color: _text),
                     tooltip: 'Volver',
-                    onPressed: () => Navigator.pop(context),
+                    onPressed: _leave,
                     padding: EdgeInsets.zero,
                     constraints: const BoxConstraints(),
                   ),

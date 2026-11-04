@@ -476,6 +476,9 @@ class _AddTaskSheetState extends State<AddTaskSheet> {
   ];
   static const _complexities = ['Low', 'Medium', 'High'];
   static const _priorities   = ['Low', 'Medium', 'High'];
+  // Tope del slider: con 100 h cada hora medía unos pocos píxeles y costaba atinar.
+  // 40 h cubre los rangos de la encuesta (la mayor opción es "más de 40 h").
+  static const _maxHours     = 40.0;
 
   @override
   void initState() {
@@ -486,7 +489,7 @@ class _AddTaskSheetState extends State<AddTaskSheet> {
       _taskType        = t.taskType.isNotEmpty ? t.taskType : 'Backend';
       _taskComplexity  = t.taskComplexity.isNotEmpty ? t.taskComplexity : 'Medium';
       _priority        = t.priority.isNotEmpty ? t.priority : 'Medium';
-      _hours           = t.estimatedHours.toDouble().clamp(1, 100);
+      _hours           = t.estimatedHours.toDouble().clamp(1, _maxHours);
     }
   }
 
@@ -628,7 +631,7 @@ class _AddTaskSheetState extends State<AddTaskSheet> {
                           ),
                           child: Slider(
                             value: _hours,
-                            min: 1, max: 100, divisions: 99,
+                            min: 1, max: _maxHours, divisions: _maxHours.toInt() - 1,
                             onChanged: (v) => setState(() => _hours = v),
                           ),
                         ),
@@ -639,7 +642,7 @@ class _AddTaskSheetState extends State<AddTaskSheet> {
                             children: [
                               Text('1 h', style: GoogleFonts.hankenGrotesk(
                                   fontSize: 11.5, color: _text3)),
-                              Text('100 h', style: GoogleFonts.hankenGrotesk(
+                              Text('${_maxHours.toInt()} h', style: GoogleFonts.hankenGrotesk(
                                   fontSize: 11.5, color: _text3)),
                             ],
                           ),

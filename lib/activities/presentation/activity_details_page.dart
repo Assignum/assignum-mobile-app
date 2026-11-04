@@ -47,6 +47,9 @@ class ActivityDetailsPage extends StatefulWidget {
 
 class _ActivityDetailsPageState extends State<ActivityDetailsPage> {
   late bool _showTasks;
+  /// Flujo de creación hasta que se dividen las tareas; después la pantalla pasa a la
+  /// vista normal (aviso sin ML, Redistribuir, Editar, Finalizar) sin tener que reabrirla.
+  late bool _creating;
   String _leaderName = 'Cargando...';
   late Activity _currentActivity;
   StreamSubscription<Activity?>? _activitySub;
@@ -55,7 +58,8 @@ class _ActivityDetailsPageState extends State<ActivityDetailsPage> {
   void initState() {
     super.initState();
     _currentActivity = widget.activity;
-    _showTasks = !widget.isCreationFlow;
+    _creating = widget.isCreationFlow;
+    _showTasks = !_creating;
     _initLeaderName();
     _activitySub = ActivityService()
         .getActivityStreamById(widget.activity.id)
@@ -269,6 +273,7 @@ class _ActivityDetailsPageState extends State<ActivityDetailsPage> {
     );
     if (!mounted) return;
     if (ok == true) {
+      setState(() => _creating = false);
       _showDivideSuccessDialog();
     } else if (ok == false) {
       _snack('Error al asignar tareas');
@@ -705,7 +710,7 @@ class _ActivityDetailsPageState extends State<ActivityDetailsPage> {
                 children: [
                   _HeaderIconBtn(icon: Icons.arrow_back_rounded, label: 'Volver', onTap: () => Navigator.pop(context)),
                   const Spacer(),
-                  if (_canManage && !widget.isCreationFlow)
+                  if (_canManage && !_creating)
                     _HeaderIconBtn(icon: Icons.edit_outlined, label: 'Editar actividad', onTap: _showEditActivity),
                 ],
               ),
@@ -820,7 +825,7 @@ class _ActivityDetailsPageState extends State<ActivityDetailsPage> {
           ),
         ],
         // Dividir tareas (only in creation flow)
-        if (widget.isCreationFlow) ...[
+        if (_creating) ...[
           const SizedBox(height: 16),
           SizedBox(
             width: double.infinity, height: 52,
@@ -942,7 +947,7 @@ class _ActivityDetailsPageState extends State<ActivityDetailsPage> {
     final isLeader = _isLeader;
     final currentUserEmail = IAuthFacade.instance.currentUserEmail;
     final tasks = _currentActivity.tasks;
-    final showHeader = _canManage && !widget.isCreationFlow;
+    final showHeader = _canManage && !_creating;
 
     if (tasks.isEmpty) {
       return ListView(
@@ -1033,7 +1038,7 @@ class _ActivityDetailsPageState extends State<ActivityDetailsPage> {
   @override
   Widget build(BuildContext context) {
     final isLeader = _currentActivity.uid == IAuthFacade.instance.currentUserId;
-    final showFinalize = isLeader && !_currentActivity.finalized && !widget.isCreationFlow;
+    final showFinalize = isLeader && !_currentActivity.finalized && !_creating;
 
     return Scaffold(
       backgroundColor: _bg,
