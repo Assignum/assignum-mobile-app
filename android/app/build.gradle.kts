@@ -32,9 +32,14 @@ android {
         versionName = flutter.versionName
     }
 
+    // El keystore de release no está en el repo. Si falta (otra PC, CI), el APK de release se
+    // firma con la clave de debug para poder probarlo; no sirve para actualizar una instalación
+    // firmada con el keystore oficial.
+    val releaseKeystore = file("../assignum-release.jks")
+
     signingConfigs {
         create("release") {
-            storeFile = file("../assignum-release.jks")
+            storeFile = releaseKeystore
             storePassword = "assignum123"
             keyAlias = "assignum"
             keyPassword = "assignum123"
@@ -43,7 +48,8 @@ android {
 
     buildTypes {
         release {
-            signingConfig = signingConfigs.getByName("release")
+            signingConfig = if (releaseKeystore.exists()) signingConfigs.getByName("release")
+                            else signingConfigs.getByName("debug")
             isMinifyEnabled = false
             isShrinkResources = false
         }
