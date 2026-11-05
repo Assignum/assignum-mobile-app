@@ -49,3 +49,6 @@ app.*.map.json
 # Keystore - NO subir al repositorio
 android/*.jks
 android/*.keystore
+
+# Caché de despliegue de Firebase Hosting
+.firebase/

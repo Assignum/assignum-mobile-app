@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart' show kIsWeb, Uint8List;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:file_picker/file_picker.dart';
@@ -35,10 +36,12 @@ class MemberTaskPage extends StatefulWidget {
   State<MemberTaskPage> createState() => _MemberTaskPageState();
 }
 
+/// En Android se guarda la ruta ([file]); en la versión web, el contenido ([bytes]).
 class _PendingFile {
-  final File file;
+  final File? file;
+  final Uint8List? bytes;
   final String name;
-  _PendingFile({required this.file, required this.name});
+  _PendingFile({this.file, this.bytes, required this.name});
 }
 
 class _MemberTaskPageState extends State<MemberTaskPage> {
@@ -107,6 +110,7 @@ class _MemberTaskPageState extends State<MemberTaskPage> {
           widget.task.id,
           p.file,
           p.name,
+          bytes: p.bytes,
         );
         _files.add(url);
       }
@@ -191,10 +195,17 @@ class _MemberTaskPageState extends State<MemberTaskPage> {
   Future<void> _pickAndUploadFile() async {
     final result = await FilePicker.platform.pickFiles(
       type: FileType.any,
-      withData: false,
+      // En el navegador no hay ruta de archivo: se lee su contenido.
+      withData: kIsWeb,
     );
     if (result == null || result.files.isEmpty) return;
     final picked = result.files.first;
+    if (kIsWeb) {
+      if (picked.bytes == null) return;
+      setState(() => _pending
+          .add(_PendingFile(bytes: picked.bytes, name: picked.name)));
+      return;
+    }
     if (picked.path == null) return;
     // Solo se guarda localmente — la subida ocurre al presionar Guardar
     setState(() => _pending.add(
@@ -633,12 +644,19 @@ class _PendingFileRow extends StatelessWidget {
           if (_isImage)
             ClipRRect(
               borderRadius: const BorderRadius.vertical(top: Radius.circular(13)),
-              child: Image.file(
-                pending.file,
-                height: 120,
-                width: double.infinity,
-                fit: BoxFit.cover,
-              ),
+              child: pending.bytes != null
+                  ? Image.memory(
+                      pending.bytes!,
+                      height: 120,
+                      width: double.infinity,
+                      fit: BoxFit.cover,
+                    )
+                  : Image.file(
+                      pending.file!,
+                      height: 120,
+                      width: double.infinity,
+                      fit: BoxFit.cover,
+                    ),
             ),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),

@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:http/http.dart' as http;
@@ -302,20 +303,24 @@ class ActivityService {
 
   /// Sube un archivo a Cloudinary y devuelve la URL segura de descarga.
   /// Usa un upload preset sin firma (unsigned), sin necesidad de backend.
+  /// En Android se sube desde la ruta ([file]); en la versión web, desde [bytes].
   Future<String> uploadTaskFile(
     String activityId,
     String taskId,
-    File file,
-    String filename,
-  ) async {
+    File? file,
+    String filename, {
+    Uint8List? bytes,
+  }) async {
     final uri = Uri.parse(
         'https://api.cloudinary.com/v1_1/$_cloudinaryCloud/auto/upload');
 
     final request = http.MultipartRequest('POST', uri)
       ..fields['upload_preset'] = _cloudinaryPreset
       ..fields['folder'] = 'activities/$activityId/tasks/$taskId'
-      ..files.add(await http.MultipartFile.fromPath('file', file.path,
-          filename: filename));
+      ..files.add(bytes != null
+          ? http.MultipartFile.fromBytes('file', bytes, filename: filename)
+          : await http.MultipartFile.fromPath('file', file!.path,
+              filename: filename));
 
     final streamed = await request.send();
     final body = await streamed.stream.bytesToString();

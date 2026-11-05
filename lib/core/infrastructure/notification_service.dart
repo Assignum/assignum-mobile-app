@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:assignum/core/infrastructure/firebase_options.dart';
 
@@ -22,6 +23,8 @@ class NotificationService {
   static final pushReceived = ValueNotifier<int>(0);
 
   static Future<void> init() async {
+    // En la versión web no hay push: los avisos se ven en la pantalla Notificaciones.
+    if (kIsWeb) return;
     FirebaseMessaging.onBackgroundMessage(_backgroundHandler);
 
     // Pedir permiso (Android 13+, iOS siempre)
@@ -46,6 +49,7 @@ class NotificationService {
   /// Guarda el token FCM + email en Firestore bajo users/{uid}.
   /// El backend busca por email para encontrar el token al invitar.
   static Future<void> saveToken(String uid, String email) async {
+    if (kIsWeb) return;
     try {
       final token = await _fcm.getToken();
       if (token == null) return;
@@ -56,6 +60,7 @@ class NotificationService {
 
   /// Elimina el token al cerrar sesión.
   static Future<void> deleteToken(String uid) async {
+    if (kIsWeb) return;
     try {
       await _fcm.deleteToken();
       await FirebaseFirestore.instance
